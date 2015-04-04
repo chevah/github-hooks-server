@@ -1,0 +1,4 @@
+* Fix twistd.run to exit with non-zero code on errors.
+* Read Trac-XML RPC from command line/config file and not have it hardcoded
+  in launcher.py
+* Use Twisted XML-RPC for Trac integration.

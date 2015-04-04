@@ -1,0 +1,7 @@
+*.py[co]
+build/
+dist/
+virtualenv/
+*.egg-info/
+build/
+twistd.log
