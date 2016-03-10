@@ -18,7 +18,8 @@ class Handler(object):
     USERS_GITHUB_TO_TRAC = {
         'adiroiban': 'adi',
         'lgheorghiu': 'laura',
-    }
+        'brunogola': 'bgola',
+        }
 
     RE_TRAC_TICKET_ID = '\[#(\d+)\] .*'
     RE_REVIEWERS = '.*reviewers{0,1}:{0,1} @.*'
