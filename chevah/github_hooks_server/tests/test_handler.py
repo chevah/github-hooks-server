@@ -128,7 +128,7 @@ class TestHandler(TestCase):
 
     def test_issue_comment_no_ticket(self):
         """
-        Noting happens is pull request title does not contain a ticket.
+        Nothing happens if the pull request title does not contain a ticket.
         """
         content = {
             u'issue': {
@@ -353,7 +353,7 @@ class TestHandler(TestCase):
 
     def test_pull_request_review_comment(self):
         """
-        Nothing happens when the we got a simple review comment.
+        Nothing happens when we get a simple review comment.
         """
         content = {
             'pull_request': {
