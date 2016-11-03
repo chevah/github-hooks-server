@@ -28,9 +28,21 @@ class TestHandler(TestCase):
     def tearDown(self):
         log.removeObserver(self.recordEvent)
         for entry in self.logs:
-            if isinstance(entry['message'][0], unicode):
-                raise AssertionError('Log message is unicode')
+                raise AssertionError('Still log messages: %s' % (self.logs,))
         super(TestHandler, self).tearDown()
+
+    def assertLog(self, expected):
+        """
+        Check that oldest entry in the log has the text `expected`.
+        """
+        current = self.logs.pop(0)
+        actual = current['log_text']
+        if actual != expected:
+            raise AssertionError('Bad log. Expecting:\n%s\nGot:\n%s' % (
+                expected, actual))
+
+        if not isinstance(actual, str):
+            raise AssertionError('Log message should be bytes: %r' % (actual,))
 
     def test_push_not_master(self):
         """
@@ -44,6 +56,7 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertFalse(self.handler.trac.getTicket.called)
+        self.assertLog('[some] Push not on master')
 
     def test_push_no_ticket(self):
         """
@@ -58,17 +71,20 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertFalse(self.handler.trac.getTicket.called)
+        self.assertLog(
+            'Pull request has no ticket id in title: Normal message r\\xc9sume'
+            )
 
     def test_push_with_ticket(self):
         """
-        Event will not be process if commits does not contain a ticket.
+        Event will be process if on of the commits has a ticket.
         """
         content = {
             'ref': 'refs/heads/master',
             'commits': [
                 {'message': u'Normal message r\xc9sume'},
                 {'message': u'[#123] Normal message r\xc9sume'},
-                {'message': u'Normal message r\xc9sume'},
+                {'message': u'Other message r\xc9sume'},
                 ],
             }
         event = Event(hook='some', name='push', content=content)
@@ -78,6 +94,13 @@ class TestHandler(TestCase):
         self.assertTrue(self.handler.trac.getTicket.called)
         self.handler.trac.getTicket.assert_called_once_with(123)
         self.handler._current_ticket.close.assert_called_once()
+
+        self.assertLog(
+            'Pull request has no ticket id in title: Normal message r\\xc9sume'
+            )
+        self.assertLog(
+            'Pull request has no ticket id in title: Other message r\\xc9sume'
+            )
 
     def test_issue_comment_no_pull(self):
         """
@@ -99,10 +122,13 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertFalse(self.handler.trac.getTicket.called)
+        self.assertLog(
+            '[some] Not a comment on a pull request'
+            )
 
     def test_issue_comment_no_ticket(self):
         """
-        Noting happend is pull request title does not contain a ticket.
+        Nothing happens if the pull request title does not contain a ticket.
         """
         content = {
             u'issue': {
@@ -120,6 +146,9 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertFalse(self.handler.trac.getTicket.called)
+        self.assertLog(
+            'Pull request has no ticket id in title: Some message r\\xc9sume.'
+            )
 
     def test_issue_comment_no_marker(self):
         """
@@ -141,6 +170,10 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertFalse(self.handler.trac.getTicket.called)
+        self.assertLog(
+            '[some][12] New comment from somebody with reviewers []\n'
+            'Simple words for simple persons r\xc3\x89sume.'
+            )
 
     def test_issue_comment_needs_review(self):
         """
@@ -173,6 +206,11 @@ class TestHandler(TestCase):
             comment=comment,
             pull_url='something',
             )
+        self.assertLog(
+            "[some][12] New comment from somebody with reviewers "
+            "['adi', u'tu']\nOne more r\xc3\x89sume\r\n\r\n"
+            "**needs-review**\r\n"
+            )
 
     def test_issue_comment_request_changes(self):
         """
@@ -202,6 +240,10 @@ class TestHandler(TestCase):
             content['comment']['body']
             )
         rc.assert_called_once_with(comment=comment)
+        self.assertLog(
+            '[some][12] New comment from somebody with reviewers []\n'
+            'Simple r\xc3\x89sume \r\n**needs-changes** magic.'
+            )
 
     def test_issue_comment_approved_last(self):
         """
@@ -236,6 +278,11 @@ class TestHandler(TestCase):
                 u'somebody approved changes.\n'
                 u'No more reviewers.\n'
                 u'Ready to merge.\n\n' + content['comment']['body']),
+            )
+        self.assertLog(
+            "[some][12] New comment from somebody with reviewers "
+            "[u'tu', 'adi']\nSimple words r\xc3\x89sume \r\n"
+            "**changes-approved** p."
             )
 
     def test_issue_comment_approved_still_reviewers(self):
@@ -272,19 +319,139 @@ class TestHandler(TestCase):
             comment=comment,
             attributes={'cc': 'adi'},
             )
+        self.assertLog(
+            "[some][12] New comment from tu with reviewers ['tu', 'adi']\n"
+            "Simple words \r\n**changes-approved** magic."
+            )
 
-    def test_getTicketFromMessage(self):
+    def test_pull_request_review_no_ticket_in_title(self):
         """
-        test_getTicketFromMessage will parse the message and return
+        Nothing happens when the PR title does not contain a ticket.
+        """
+        content = {
+            'pull_request': {
+                'title': 'Some message.',
+                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
+                },
+            'review': {
+                'user': {'login': 'tu'},
+                'body': 'anything here.',
+                'state': 'changes_requested',
+                }
+            }
+        event = Event(hook='some', name='pull_request_review', content=content)
+
+        ticket = Mock()
+        ticket.attributes = {'cc': 'tu, adi'}
+        self.handler.trac.getTicket = Mock(return_value=ticket)
+
+        self.handler.dispatch(event)
+
+        self.assertFalse(self.handler.trac.getTicket.called)
+        self.assertLog(
+            'Pull request has no ticket id in title: Some message.')
+
+    def test_pull_request_review_comment(self):
+        """
+        Nothing happens when we get a simple review comment.
+        """
+        content = {
+            'pull_request': {
+                'title': '[#42] Some message.',
+                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
+                },
+            'review': {
+                'user': {'login': 'tu'},
+                'body': 'anything here.',
+                'state': 'commented',
+                }
+            }
+        event = Event(hook='some', name='pull_request_review', content=content)
+
+        ticket = Mock()
+        ticket.attributes = {'cc': 'tu, adi'}
+        self.handler.trac.getTicket = Mock(return_value=ticket)
+
+        self.handler.dispatch(event)
+
+        self.assertFalse(self.handler.trac.getTicket.called)
+
+    def test_pull_request_review_needs_changes(self):
+        """
+        When the review has the 'Request changes' action the ticket is put
+        into the needs-changes state.
+        """
+        content = {
+            'pull_request': {
+                'title': '[#42] Some message.',
+                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
+                },
+            'review': {
+                'user': {'login': 'tu'},
+                'body': 'anything here.',
+                'state': 'changes_requested',
+                }
+            }
+        event = Event(hook='some', name='pull_request_review', content=content)
+
+        ticket = Mock()
+        ticket.attributes = {'cc': 'tu, adi'}
+        self.handler.trac.getTicket = Mock(return_value=ticket)
+
+        self.handler.dispatch(event)
+
+        self.handler.trac.getTicket.assert_called_once_with(42)
+        ticket.requestChanges.assert_called_once_with(
+            comment=u'tu requested changes to this ticket.\n\nanything here.')
+
+    def test_pull_request_review_approved_last(self):
+        """
+        When the review was approved and no other reviewers are expected,
+        the ticket is set into the needs-merge state.
+        """
+        content = {
+            'pull_request': {
+                'title': '[#42] Some message.',
+                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
+                },
+            'review': {
+                'user': {'login': 'tu'},
+                'body': 'anything here.',
+                'state': 'approved',
+                }
+            }
+        event = Event(hook='some', name='pull_request_review', content=content)
+
+        ticket = Mock()
+        ticket.attributes = {'cc': 'tu'}
+        self.handler.trac.getTicket = Mock(return_value=ticket)
+
+        self.handler.dispatch(event)
+
+        self.handler.trac.getTicket.assert_called_once_with(42)
+        ticket.requestMerge.assert_called_once_with(
+            cc='tu, adi',
+            comment=(
+                u'tu approved changes.\nNo more reviewers.\n'
+                'Ready to merge.\n\nanything here.'
+                )
+            )
+
+    def test_getTicketFromTitle(self):
+        """
+        test_getTicketFromTitle will parse the message and return
         the ticket id.
         """
         message = u'[#12] Hello r\xc9sume.'
-        ticket_id = self.handler._getTicketFromMessage(message)
+        ticket_id = self.handler._getTicketFromTitle(message)
         self.assertEqual(12, ticket_id)
 
         message = u'Simle words 12 r\xc9sume.'
-        ticket_id = self.handler._getTicketFromMessage(message)
+        ticket_id = self.handler._getTicketFromTitle(message)
         self.assertIsNone(ticket_id)
+
+        self.assertLog(
+            'Pull request has no ticket id in title: Simle words 12 r\\xc9sume.')
 
     def test_getReviewers_no(self):
         """
@@ -420,6 +587,9 @@ class TestHandler(TestCase):
         result = self.handler._getRemainingReviewers('ala, bala', 'popa')
 
         self.assertEqual(['ala', 'bala'], result)
+
+        self.assertLog(
+            'Current user "popa" not in the list of reviewers ala, bala')
 
     def test_getRemainingReviewers_found(self):
         """
