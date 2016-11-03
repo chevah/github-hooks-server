@@ -65,7 +65,7 @@ class Handler(object):
         """
         Check commit message on master and close Trac ticket if required.
         """
-        ticket_id = self._getTicketFromMessage(commit['message'])
+        ticket_id = self._getTicketFromTitle(commit['message'])
         if not ticket_id:
             return
 
@@ -79,6 +79,63 @@ class Handler(object):
             )
         self._current_ticket = ticket
 
+    def pull_request_review(self, event):
+        """
+        Called when a PR review overview message is left.
+        """
+        title = event.content['pull_request']['title']
+        ticket_id = self._getTicketFromTitle(title)
+        if not ticket_id:
+            return
+
+        body = event.content['review']['body']
+        user = self._getTracUser(event.content['review']['user']['login'])
+        reviewers = self._getReviewers(event.content['pull_request']['body'])
+
+        state = event.content['review']['state']
+        if state == 'approved':
+            # An approved review comment.
+            self._setApproveChanges(ticket_id, user, body, reviewers)
+        elif state == 'changes_requested':
+            # An needs changes review comment.
+            self._setNeedsChanges(ticket_id, user, body)
+        else:
+            # Just a simple comment.
+            # Do nothing
+            return
+
+    def _setNeedsChanges(self, ticket_id, user, body):
+        """
+        Set the ticket with `ticket_id` in needs changes state.
+        """
+        ticket = self.trac.getTicket(ticket_id)
+        comment = u'%s requested changes to this ticket.\n\n%s' % (
+            user, body)
+        ticket.requestChanges(comment=comment)
+        self._current_ticket = ticket
+
+    def _setApproveChanges(self, ticket_id, user, body, reviewers):
+        """
+        Update the ticket with `ticket_id` as approved.
+        """
+        ticket = self.trac.getTicket(ticket_id)
+        remaining_reviewers = self._getRemainingReviewers(
+            ticket.attributes['cc'], user)
+        if not remaining_reviewers:
+            comment = (
+                u'%s approved changes.\n'
+                u'No more reviewers.\n'
+                u'Ready to merge.\n\n%s' % (
+                    user, body))
+            cc = ', '.join(reviewers)
+            ticket.requestMerge(comment=comment, cc=cc)
+        else:
+            comment = u'%s approved changes.\n\n%s' % (user, body)
+            ticket.update(
+                attributes={'cc': ', '.join(remaining_reviewers)},
+                comment=comment)
+        self._current_ticket = ticket
+
     def issue_comment(self, event):
         """
         At comments on issues which are pull request, check for
@@ -90,10 +147,8 @@ class Handler(object):
             return
 
         message = event.content['issue']['title']
-        ticket_id = self._getTicketFromMessage(message)
+        ticket_id = self._getTicketFromTitle(message)
         if not ticket_id:
-            log.msg(
-                '[%s] Pull request has no ticket id in URL' % (event.hook))
             return
 
         body = event.content['comment']['body']
@@ -103,7 +158,6 @@ class Handler(object):
         log.msg((u'[%s][%d] New comment from %s with reviewers %s\n%s' % (
             event.hook, ticket_id, user, reviewers, body)).encode('utf-8'))
 
-        # Check needs review.
         if self._needsReview(body):
             ticket = self.trac.getTicket(ticket_id)
             comment = u'%s requested the review of this ticket.\n\n%s' % (
@@ -113,41 +167,22 @@ class Handler(object):
                 comment=comment, cc=cc, pull_url=pull_url)
             self._current_ticket = ticket
 
-        # Check needs changes.
-        if self._needsChanges(body):
-            ticket = self.trac.getTicket(ticket_id)
-            comment = u'%s requested changes to this ticket.\n\n%s' % (
-                user, body)
-            ticket.requestChanges(comment=comment)
-            self._current_ticket = ticket
+        elif self._needsChanges(body):
+            self._setNeedsChanges(ticket_id, user, body)
 
-        if self._changesApproved(body):
-            ticket = self.trac.getTicket(ticket_id)
-            remaining_reviewers = self._getRemainingReviewers(
-                ticket.attributes['cc'], user)
-            if not remaining_reviewers:
-                comment = (
-                    u'%s approved changes.\n'
-                    u'No more reviewers.\n'
-                    u'Ready to merge.\n\n%s' % (
-                        user, body))
-                cc = ', '.join(reviewers)
-                ticket.requestMerge(comment=comment, cc=cc)
-            else:
-                comment = u'%s approved changes.\n\n%s' % (user, body)
-                ticket.update(
-                    attributes={'cc': ', '.join(remaining_reviewers)},
-                    comment=comment)
-            self._current_ticket = ticket
+        elif self._changesApproved(body):
+            self._setApproveChanges(ticket_id, user, body, reviewers)
 
-    def _getTicketFromMessage(self, message):
+    def _getTicketFromTitle(self, text):
         """
-        Parse message and return ticket id or None if message
+        Parse title and return ticket id or None if text
         does not contains a ticket id.
         """
         # https://github.com/chevah/seesaw/pull/12-some.new
-        result = re.match(self.RE_TRAC_TICKET_ID, message)
+        result = re.match(self.RE_TRAC_TICKET_ID, text)
         if not result:
+            log.msg(
+                'Pull request has no ticket id in title: %s' % (text,))
             return
         return int(result.group(1))
 

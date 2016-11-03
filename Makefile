@@ -1,6 +1,9 @@
 all: test
 	
 
+clean:
+	rm -rf build
+
 env:
 	@if [ ! -d "build" ]; then virtualenv build; fi
 
@@ -18,8 +21,8 @@ run:
 
 
 lint:
-	pyflakes chevah/ scripts/
-	pep8 chevah/ scripts/
+	@build/bin/pyflakes chevah/ scripts/
+	@build/bin/pep8 chevah/ scripts/
 
 
 test: lint
