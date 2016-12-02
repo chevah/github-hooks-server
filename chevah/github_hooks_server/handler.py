@@ -19,6 +19,7 @@ class Handler(object):
         'adiroiban': 'adi',
         'lgheorghiu': 'laura',
         'brunogola': 'bgola',
+        'hcs0': 'hcs',
         }
 
     RE_TRAC_TICKET_ID = '\[#(\d+)\] .*'
