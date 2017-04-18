@@ -6,8 +6,6 @@ from itertools import groupby, count
 from operator import itemgetter
 
 from datetime import timedelta, datetime
-from epsilon.extime import Time
-from epsilon import structlike
 
 linkStyle = "text-decoration: none; color: white;"
 
@@ -16,6 +14,7 @@ from twisted.web.template import Element, XMLFile, renderer, tags, flatten
 from twisted.python.modules import getModule
 from twisted.python.filepath import FilePath
 
+from chevah.github_hooks_server.extime import Time
 
 CONFIGURATION = {
     'trac-db': ('no/such/path/define-a-trac-db',),
@@ -24,10 +23,15 @@ CONFIGURATION = {
 
 factors = {}
 
-class Factor(structlike.record('order points description')):
+
+class Factor(dict):
     """
     A score thing.
     """
+    def __init__(self, *arg, **kw):
+        super(Factor, self).__init__(*arg, **kw)
+        self.__dict__ = kw
+
 
 _nextorder = count().next
 
@@ -39,7 +43,11 @@ def deffactor(score, description):
     Suck it, ubuntu.  Use software in ENGLISH.
     """
     key = (object(), repr(description))
-    factors[key] = Factor(_nextorder(), score, description)
+    factors[key] = Factor(
+        order=_nextorder(),
+        points=score,
+        description=description,
+        )
     return key
 
 # You can enter tags (tags.br()) in the description as this is sent to HTML.
