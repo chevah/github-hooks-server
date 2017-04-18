@@ -16,7 +16,9 @@ run:
 	# Run against an invalid Trac instance with fake password.
 	@echo '127.0.0.1@test:test' > build/trac_test_credentials
 	@build/bin/python \
-		scripts/start-chevah-github-hooks.py build/trac_test_credentials \
+		scripts/start-chevah-github-hooks.py \
+		build/trac_test_credentials \
+		build/trac.db \
 		--nodaemon
 
 

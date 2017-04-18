@@ -451,7 +451,8 @@ class TestHandler(TestCase):
         self.assertIsNone(ticket_id)
 
         self.assertLog(
-            'Pull request has no ticket id in title: Simle words 12 r\\xc9sume.')
+            'Pull request has no ticket id in title: '
+            'Simle words 12 r\\xc9sume.')
 
     def test_getReviewers_no(self):
         """
