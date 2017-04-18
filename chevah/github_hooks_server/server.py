@@ -46,11 +46,11 @@ def static(request):
 
 @route('/highscores',  methods=['GET'])
 def hook(request):
-    request.setHeader('content-type', 'text/html; charset=utf-8')
+    request.setHeader(b'content-type', b'text/html; charset=utf-8')
     if 'time' in request.args:
         t = highscores.parsetime(request.args['time'][0])
     else:
         t = highscores.Time()
     start, end = highscores.monthRangeAround(t)
     highscores.main(start, end, request.write)
-    return ''
+    return b''
