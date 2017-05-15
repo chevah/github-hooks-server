@@ -1,3 +1,23 @@
+0.6.0 (2017-05-15)
+==================
+
+* Make GitHub Review comments to use a format friendly to Leaderboard.
+* Remove highscores.
+* Remove dependency on txghserf.
+
+
+0.5.4 (2017-04-18)
+==================
+
+* Add total info.
+
+
+0.5.3 (2017-04-18)
+==================
+
+* Remove future unicode_literals.
+
+
 0.5.2 (2017-04-18)
 ==================
 

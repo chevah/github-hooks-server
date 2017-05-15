@@ -13,28 +13,25 @@ the CONFIGURATION global.
 """
 import sys
 
-from twisted.python import log
 from twisted.scripts.twistd import run
 
-from txghserf.server import CONFIGURATION
+from chevah.github_hooks_server.server import CONFIGURATION
 
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         raise AssertionError(
             'Launch script with at least path to file holding Trac '
-            'credentials and the path to the Trac DB.')
+            'credentials.')
 
     # Read Trac credentials and address.
     with open(sys.argv[1], 'r') as file:
         credentials_and_address = file.read().strip()
 
-    trac_db = sys.argv[2]
-
     base_arguments = []
     web_arguments = []
-    for argument in sys.argv[3:]:
+    for argument in sys.argv[2:]:
         if (
             argument.startswith('--pidfile') or
             argument.startswith('--nodaemon')
@@ -53,7 +50,6 @@ if __name__ == '__main__':
 
     # Pass the trac credentials in a safer way.
     CONFIGURATION['trac-url'] = credentials_and_address
-    CONFIGURATION['trac-db'] = trac_db
 
     # Start twistd.
     sys.exit(run())

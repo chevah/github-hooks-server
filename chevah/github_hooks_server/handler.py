@@ -110,7 +110,7 @@ class Handler(object):
         Set the ticket with `ticket_id` in needs changes state.
         """
         ticket = self.trac.getTicket(ticket_id)
-        comment = u'%s requested changes to this ticket.\n\n%s' % (
+        comment = u'%s needs-changes to this ticket.\n\n%s' % (
             user, body)
         ticket.requestChanges(comment=comment)
         self._current_ticket = ticket
@@ -124,14 +124,14 @@ class Handler(object):
             ticket.attributes['cc'], user)
         if not remaining_reviewers:
             comment = (
-                u'%s approved changes.\n'
+                u'%s changes-approved.\n'
                 u'No more reviewers.\n'
                 u'Ready to merge.\n\n%s' % (
                     user, body))
             cc = ', '.join(reviewers)
             ticket.requestMerge(comment=comment, cc=cc)
         else:
-            comment = u'%s approved changes.\n\n%s' % (user, body)
+            comment = u'%s changes-approved.\n\n%s' % (user, body)
             ticket.update(
                 attributes={'cc': ', '.join(remaining_reviewers)},
                 comment=comment)

@@ -18,7 +18,6 @@ run:
 	@build/bin/python \
 		scripts/start-chevah-github-hooks.py \
 		build/trac_test_credentials \
-		build/trac.db \
 		--nodaemon
 
 
