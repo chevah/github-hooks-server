@@ -15,7 +15,7 @@ import sys
 
 from twisted.scripts.twistd import run
 
-from chevah.github_hooks_server.server import CONFIGURATION
+from chevah.github_hooks_server.configuration import CONFIGURATION
 
 
 if __name__ == '__main__':

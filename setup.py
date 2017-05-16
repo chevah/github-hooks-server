@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.6.0'
+VERSION = '0.6.1'
 
 
 class PublishCommand(Command):

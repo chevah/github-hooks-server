@@ -1,3 +1,9 @@
+0.6.1 (2017-05-16)
+==================
+
+* Add separate configuration module, which should be imported first.
+
+
 0.6.0 (2017-05-15)
 ==================
 
