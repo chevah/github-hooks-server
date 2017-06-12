@@ -1,11 +1,16 @@
 """
 Changes of the upstream github_buildbot.
+
+The upstream code uses the PB change source, while we are using the
+try scheduler.
 """
 from __future__ import absolute_import
 from __future__ import print_function
 from future.utils import iteritems
 
+import json
 import logging
+import httplib
 
 from twisted.internet import defer
 
@@ -27,13 +32,97 @@ class BuildbotTryNotifier(GitHubBuildBot):
         self.auth = configuration['buildbot-credentials']
 
         self.head_commit = False
-        self.category = None
 
-    def addChange(self, _, remote, changei, src='git'):
+    def handle_pull_request(self, payload, repo, repo_url):
+        """
+        Consumes the JSON as a python object and actually starts the build.
+
+        :arguments:
+            payload
+                Python Object that represents the JSON sent by GitHub Service
+                Hook.
+        """
+        if payload['action'] not in ("opened", "synchronize"):
+            logging.info(
+                "PR %r %r, ignoring", payload['number'], payload['action'])
+            return None
+
+        branch = payload['pull_request']['head']['ref']
+        # Create the base change.
+        change = {
+            'id': payload['pull_request']['head']['sha'],
+            'message': payload['pull_request']['title'],
+            'timestamp': payload['pull_request']['updated_at'],
+            'url': payload['pull_request']['html_url'],
+            'author': {
+                'username': payload['pull_request']['user']['login'],
+            },
+            'added': [],
+            'removed': [],
+            'modified': [],
+        }
+        return [self.process_change(change, branch, repo, repo_url)]
+
+    def process_change(self, change, branch, repo, repo_url):
+        """
+        Gather changes from various sources and produce a single structure.
+        """
+        files = change['added'] + change['removed'] + change['modified']
+        who = ""
+        if 'username' in change['author']:
+            who = change['author']['username']
+        else:
+            who = change['author']['name']
+
+        if 'email' in change['author']:
+            who = "%s <%s>" % (who, change['author']['email'])
+
+        comments = 'GitHub Hooks: %s' % (change['message'],)
+        if len(comments) > 128:
+            trim = " ... (trimmed)"
+            comments = comments[:128 - len(trim)] + trim
+
+        properties = {}
+
+        if '/pull/' in change['url']:
+            pr_id = change['url'].rsplit('/', 1)[1]
+            # We have a PR change.
+            properties['github_pull_id'] = pr_id
+        else:
+            pr_id = None
+
+        project = repo.split('/')[1]
+
+        return {
+            'revision': change['id'],
+            'revlink': change['url'],
+            'who': who,
+            'properties': properties,
+            'pr': pr_id,
+            'comments': comments,
+            'repository': repo_url,
+            'files': files,
+            'project': project,
+            'slug': repo,
+            'branch': branch,
+            }
+
+    def connected(self, remote, changes, request):
+        """
+        Called when we are connected to the PR.
+        """
+        # By this point we've connected to buildbot so
+        # we don't really need to keep github waiting any
+        # longer
+        request.setResponseCode(httplib.ACCEPTED)
+        request.write(json.dumps({"result": "Submitting changes."}))
+        request.finish()
+        return self.addChange(remote, changes.__iter__())
+
+    def addChange(self, remote, changei):
         """
         Sends changes from the commit to the buildmaster.
         """
-        logging.debug("addChange %r, %r", remote, changei)
         try:
             change = changei.next()
         except StopIteration:
@@ -44,32 +133,24 @@ class BuildbotTryNotifier(GitHubBuildBot):
         for key, value in iteritems(change):
             logging.debug("  %s: %s", key, value)
 
-        properties = {}
-        project = change['project'].split('/')[1]
-
-        if '/pull/' in change['revlink']:
-            # We have a PR change.
-            properties = {
-                'github_pull_id': change['revlink'].rsplit('/', 1)[1],
-                }
-
-        if change['branch'] == 'master' or properties:
+        if change['branch'] == 'master' or change['pr'] is not None:
             # Only trigger if it was pushed on master or PR.
             deferred = remote.callRemote(
                 'try',
                 branch=change['branch'],
                 revision=change['revision'],
-                patch=(1, ''),
-                project='project',
+                project=change['project'],
                 repository=change['repository'],
-                builderNames=['%s-gk-review' % (project,)],
                 who=change['who'],
-                comment="GitHub Hooks: %s" % (change['comments'],),
-                properties=properties,
+                comment=change['comments'],
+                properties=change['properties'],
+                # Try specific changes.
+                patch=(1, ''),
+                builderNames=['%s-gk-review' % (change['project'],)],
                 )
         else:
             deferred = defer.succeed(None)
             logging.debug('Ignoring change as not pushed to master or PR.')
 
-        deferred.addCallback(self.addChange, remote, changei, src)
+        deferred.addCallback(lambda _: self.addChange(remote, changei))
         return deferred

@@ -1,3 +1,9 @@
+0.7.1 (2017-06-12)
+==================
+
+* Fix the branch named send by try for a PR via GitHub hooks.
+
+
 0.7.0 (2017-06-12)
 ==================
 
