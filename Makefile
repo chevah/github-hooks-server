@@ -13,12 +13,16 @@ deps: env
 
 
 run:
-	# Run against an invalid Trac instance with fake password.
-	@echo '127.0.0.1@test:test' > build/trac_test_credentials
 	@build/bin/python \
 		scripts/start-chevah-github-hooks.py \
-		build/trac_test_credentials \
+		build/test_credentials \
 		--nodaemon
+
+
+HEADERS := $(shell while read line; do echo -n "-H '$$line' "; done < build/payload_headers)
+
+payload:
+	curl -v $(HEADERS) -d @build/payload_content localhost:8080/buildmaster
 
 
 lint:

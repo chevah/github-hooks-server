@@ -14,11 +14,10 @@ from twisted.python import log
 from cidr import get_IP_list
 from chevah.github_hooks_server.handler import Handler
 from chevah.github_hooks_server.configuration import CONFIGURATION
+from chevah.github_hooks_server.buildbot_try import BuildbotTryNotifier
 
 # Shut up the linter.
 resource
-
-
 
 
 def expand_allowed_ips():
@@ -128,6 +127,14 @@ def hook(request, hook_name):
         )
 
     handle_event(event)
+
+
+@route('/buildmaster',  methods=['POST'])
+def buildmaster(request):
+    """
+    Buildbot integration entry point.
+    """
+    return BuildbotTryNotifier(CONFIGURATION)
 
 
 def parse_request(request, event_name):

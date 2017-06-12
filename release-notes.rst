@@ -1,3 +1,9 @@
+0.7.0 (2017-06-12)
+==================
+
+* Send GitHub hooks to Buildbot via try scheduler.
+
+
 0.6.1 (2017-05-16)
 ==================
 

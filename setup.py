@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.6.1'
+VERSION = '0.7.0'
 
 
 class PublishCommand(Command):
@@ -45,6 +45,7 @@ distribution = setup(
         },
     scripts=['scripts/start-chevah-github-hooks.py'],
     install_requires=[
+        'future',
         'klein==17.2',
         ],
     extras_require = {

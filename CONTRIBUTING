@@ -15,15 +15,32 @@ Run tests::
     nosetests
 
 
-Manual testing
+Manual starting
 --------------
 
-Check the server launch, but you can not do to many things as it needs to be
-fed with GitHub hooks and to connect to a Trac instance
+You can manually launch it on your dev system.
+In this env it can't do to many things as it needs access to Trac instance and
+buildbot instance.
 
-For highscores, you will need to place a trac.db file in build/ so that it
-will some something to work on.
+You will need a trac and a buildbot set up.
+Create a `build/test_credentials` with the following details on each line:
+
+* trac credentials
+* buildbot address:port
+* buildmaster PR account
 
 To launch the server use:
 
     make run
+
+
+Manual hook replay
+------------------
+
+In build/ folder create build/payload_headers and build/payload_content files
+in which you can put the content based on the content that you find on
+GitHub.com.
+
+Trigger the payload push using::
+
+    make payload

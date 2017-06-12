@@ -18,4 +18,13 @@ CONFIGURATION = {
 
     # URL to Trac XML-RPC API.
     'trac-url': 'mock',
+
+    # Details for the GitHub server from which hooks are received.
+    'github-server': 'github.com',
+    'github-hook-secret': None,
+
+    # Address and credentails for the Buildmaster perspective broker.
+    'buildbot-master': 'localhost:1080',
+    'buildbot-credentials': 'user:password',
+
     }

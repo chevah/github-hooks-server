@@ -12,10 +12,33 @@ twistd web does not allow passing any extra arguments so we pass them via
 the CONFIGURATION global.
 """
 import sys
+import logging
+
 
 from twisted.scripts.twistd import run
+from twisted.logger import globalLogPublisher
+from twisted.python import log, failure
 
 from chevah.github_hooks_server.configuration import CONFIGURATION
+
+
+class TwistedLogHandler(logging.Handler):
+    """
+    Sends Python stdlib logging output through the Twisted logging system.
+    """
+
+    def emit(self, record):
+        try:
+            info = vars(record)
+            msg = self.format(record)
+            info['isError'] = (record.levelno >= logging.ERROR)
+            if record.exc_info is not None:
+                t, v, tb = record.exc_info
+                info['failure'] = failure.Failure(v, t, tb)
+            info['message'] = record.msg
+            log.msg(msg, **info)
+        except Exception:
+            self.handleError(record)
 
 
 if __name__ == '__main__':
@@ -27,7 +50,10 @@ if __name__ == '__main__':
 
     # Read Trac credentials and address.
     with open(sys.argv[1], 'r') as file:
-        credentials_and_address = file.read().strip()
+        lines = file.readlines()
+        CONFIGURATION['trac-url'] = lines[0].strip()
+        CONFIGURATION['buildbot-master'] = lines[1].strip()
+        CONFIGURATION['buildbot-credentials'] = lines[2].strip()
 
     base_arguments = []
     web_arguments = []
@@ -48,8 +74,13 @@ if __name__ == '__main__':
         ])
     sys.argv.extend(web_arguments)
 
-    # Pass the trac credentials in a safer way.
-    CONFIGURATION['trac-url'] = credentials_and_address
+
+
+    # Set up forwarding of stdlib logs to Twisted.
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    handler = TwistedLogHandler()
+    logger.addHandler(handler)
 
     # Start twistd.
     sys.exit(run())
