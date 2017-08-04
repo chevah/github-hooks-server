@@ -17,6 +17,11 @@ from twisted.internet import defer
 from chevah.github_hooks_server.github_buildbot import GitHubBuildBot
 
 
+# Name of the repos which will not trigger tests on PR push.
+PR_EXCEPTED_REPOS = [
+    'chevah/python-package',
+    ]
+
 
 class BuildbotTryNotifier(GitHubBuildBot):
     """
@@ -42,6 +47,9 @@ class BuildbotTryNotifier(GitHubBuildBot):
                 Python Object that represents the JSON sent by GitHub Service
                 Hook.
         """
+        if repo in PR_EXCEPTED_REPOS:
+            return None
+
         if payload['action'] not in ("opened", "synchronize"):
             logging.info(
                 "PR %r %r, ignoring", payload['number'], payload['action'])
