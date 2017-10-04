@@ -4,7 +4,6 @@ chevah/github_hooks_server/tests/private.py
 .gitsecret/keys/pubring.gpg~
 .gitsecret/keys/random_seed
 
-
 # Generic ingore.
 .noseids
 *.py[co]

@@ -4,6 +4,8 @@ Development
 To launch the server you will need to store the secrets in a file.
 See `scripts/start-chevah-github-hooks.py` for usage.
 
+The passwords to Trac and GitHub are protected using git-secret.
+
 If starting with a clean repo, install virtualenv and dev requirements::
 
     make deps
