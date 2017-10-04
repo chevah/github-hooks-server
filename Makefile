@@ -9,7 +9,9 @@ env:
 
 
 deps: env
-	@build/bin/pip install -Ue '.[dev]'
+	@build/bin/pip install -Ue '.[dev]' \
+		--index-url http://deag.chevah.com:10042 \
+		--trusted-host deag.chevah.com
 
 
 run:

@@ -11,10 +11,11 @@ from __future__ import unicode_literals
 from unittest import TestCase
 
 from mock import Mock
-from txghserf.server import Event
 from twisted.python import log
 
 from chevah.github_hooks_server.handler import Handler
+from chevah.github_hooks_server.server import Event
+
 from chevah.github_hooks_server.tests.private import github_token
 
 

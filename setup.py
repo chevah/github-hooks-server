@@ -45,7 +45,7 @@ distribution = setup(
         },
     scripts=['scripts/start-chevah-github-hooks.py'],
     install_requires=[
-        'future',
+        'Twisted==15.5.0.chevah1',
         'klein==17.2',
         'github3.py==1.0.0.gitc82e90e',
         ],

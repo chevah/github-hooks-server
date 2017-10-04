@@ -6,7 +6,6 @@ try scheduler.
 """
 from __future__ import absolute_import
 from __future__ import print_function
-from future.utils import iteritems
 
 import json
 import logging
@@ -138,7 +137,7 @@ class BuildbotTryNotifier(GitHubBuildBot):
             return None
 
         logging.info("New revision: %s", change['revision'][:8])
-        for key, value in iteritems(change):
+        for key, value in change.items():
             logging.debug("  %s: %s", key, value)
 
         if change['branch'] == 'master' or change['pr'] is not None:

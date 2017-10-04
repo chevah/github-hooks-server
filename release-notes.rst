@@ -3,6 +3,7 @@
 
 * Manage labels on GitHub to get some review state.
 * Ignore delete events.
+* Remove dependency to future.
 
 
 0.7.2 (2017-08-04)

@@ -15,7 +15,6 @@ the "application.vnd.github.v3+json" payload. Configure *only* "push" and/or
 
 from __future__ import absolute_import
 from __future__ import print_function
-from future.utils import iteritems
 
 import hmac
 import logging
@@ -290,7 +289,7 @@ class GitHubBuildBot(resource.Resource):
             return None
 
         logging.info("New revision: %s", change['revision'][:8])
-        for key, value in iteritems(change):
+        for key, value in change.items():
             logging.debug("  %s: %s", key, value)
 
         change['src'] = src
