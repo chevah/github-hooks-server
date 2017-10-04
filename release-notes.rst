@@ -1,3 +1,9 @@
+0.8.1 (2017-10-04)
+==================
+
+* Declare missing github3.py dependencies in our setup.py
+
+
 0.8.0 (2017-10-04)
 ==================
 

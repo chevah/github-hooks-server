@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.8.0'
+VERSION = '0.8.1'
 
 
 class PublishCommand(Command):
@@ -45,9 +45,16 @@ distribution = setup(
         },
     scripts=['scripts/start-chevah-github-hooks.py'],
     install_requires=[
-        'Twisted==15.5.0.chevah1',
         'klein==17.2',
-        'github3.py==1.0.0.gitc82e90e',
+        # We keep an older version of python is use.
+        'Twisted==15.5.0.chevah1',
+        'github3-py==1.0.0.gitc82e90e',
+        # We don't depended directly on them but github3.py
+        # dependencies are bad.
+        'urllib3',
+        'chardet',
+        'certifi',
+        'idna',
         ],
     extras_require = {
         'dev': [
