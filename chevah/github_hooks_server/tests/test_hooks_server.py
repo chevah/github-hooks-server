@@ -20,6 +20,7 @@ from twisted.internet.address import IPv4Address
 from twisted.trial.unittest import TestCase
 from twisted.web.test.test_web import DummyRequest
 
+from chevah.github_hooks_server import server
 from chevah.github_hooks_server.server import (
     CONFIGURATION,
     expand_allowed_ips,
@@ -93,8 +94,10 @@ class TestServer(TestCase):
         """
         An error is raised when the request has an unsuperted content type.
         """
-        self.request.headers['x-github-event'] = 'push'
-        self.request.headers['content-type'] = 'unknown'
+        self.request.requestHeaders.setRawHeaders(
+            'x-github-event', ['push'])
+        self.request.requestHeaders.setRawHeaders(
+            'content-type', ['unknown'])
 
         result = hook(self.request, 'hook_name')
 
@@ -104,9 +107,10 @@ class TestServer(TestCase):
         """
         An error is raised on parser failures.
         """
-        self.request.headers['x-github-event'] = 'push'
-        self.request.headers['content-type'] = (
-            'application/x-www-form-urlencoded')
+        self.request.requestHeaders.setRawHeaders(
+            'x-github-event', ['push'])
+        self.request.requestHeaders.setRawHeaders(
+            'content-type', ['application/x-www-form-urlencoded'])
         self.request.content = StringIO('bad-json-formtat')
 
         result = hook(self.request, 'hook_name')
@@ -123,11 +127,19 @@ class TestServer(TestCase):
             self.called_event = event
 
         CONFIGURATION['callback'] = callbacks
-        self.request.headers['x-github-event'] = 'issue_comment'
-        self.request.headers['content-type'] = 'application/json'
+
+        self.request.requestHeaders.setRawHeaders(
+            'x-github-event', ['issue_comment'])
+        self.request.requestHeaders.setRawHeaders(
+            'content-type', ['application/json'])
         self.request.content = StringIO('{"key": "value"}')
 
-        result = hook(self.request, 'hook_name')
+        try:
+            original_handler = server.handle_event
+            server.handle_event = callbacks
+            result = hook(self.request, 'hook_name')
+        finally:
+            server.handle_event = original_handler
 
         self.assertIsNone(result)
         self.assertIsNotNone(self.called_event)
@@ -144,12 +156,18 @@ class TestServer(TestCase):
         def callbacks(event):
             self.called_event = event
         CONFIGURATION['callback'] = callbacks
-        self.request.headers['x-github-event'] = 'push'
-        self.request.headers['content-type'] = (
-            'application/x-www-form-urlencoded')
+        self.request.requestHeaders.setRawHeaders(
+            'x-github-event', ['push'])
+        self.request.requestHeaders.setRawHeaders(
+            'content-type', ['application/x-www-form-urlencoded'])
         self.request.args = {'payload': ['{"key": "value"}']}
 
-        result = hook(self.request, 'hook_name')
+        try:
+            original_handler = server.handle_event
+            server.handle_event = callbacks
+            result = hook(self.request, 'hook_name')
+        finally:
+            server.handle_event = original_handler
 
         self.assertIsNone(result)
         self.assertIsNotNone(self.called_event)

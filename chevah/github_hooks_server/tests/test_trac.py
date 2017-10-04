@@ -1,5 +1,7 @@
 """
-Tests for Trac integrations.
+Functional tests for Trac integrations.
+
+These tests are using a real Trac instance over XML-RPC.
 """
 
 from unittest import TestCase
