@@ -7,8 +7,8 @@ HTTP POST it receives from github.com and build the appropriate repository.
 If your github repository is private, you must add a ssh key to the github
 repository for the user who initiated the build on the worker.
 
-This version of github_buildbot.py parses v3 of the github webhook api, with the
-"application.vnd.github.v3+json" payload. Configure *only* "push" and/or
+This version of github_buildbot.py parses v3 of the github webhook api, with
+the "application.vnd.github.v3+json" payload. Configure *only* "push" and/or
 "pull_request" events to trigger this webhook.
 
 """
@@ -152,14 +152,16 @@ class GitHubBuildBot(resource.Resource):
             trim = " ... (trimmed, commit message exceeds 1024 characters)"
             comments = comments[:1024 - len(trim)] + trim
 
-        info_change = {'revision': change['id'],
-             'revlink': change['url'],
-             'who': who,
-             'comments': comments,
-             'repository': repo_url,
-             'files': files,
-             'project': repo,
-             'branch': branch}
+        info_change = {
+            'revision': change['id'],
+            'revlink': change['url'],
+            'who': who,
+            'comments': comments,
+            'repository': repo_url,
+            'files': files,
+            'project': repo,
+            'branch': branch,
+            }
 
         if self.category:
             info_change['category'] = self.category
@@ -343,10 +345,10 @@ def setup_options():
                       default=None, dest="secret")
 
     parser.add_option("-l", "--log",
-                      help="The absolute path, including filename, to save the "
-                           "log to [default: %default].  This may also be "
-                           "'stdout' indicating logs should output directly to "
-                           "standard output instead.",
+                      help="The absolute path, including filename, to save the"
+                           " log to [default: %default].  This may also be "
+                           "'stdout' indicating logs should output directly to"
+                           " standard output instead.",
                       default="github_buildbot.log", dest="log")
 
     parser.add_option("-L", "--level",

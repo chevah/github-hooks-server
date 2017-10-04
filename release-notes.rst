@@ -1,3 +1,10 @@
+0.8.0 (2017-10-04)
+==================
+
+* Manage labels on GitHub to get some review state.
+* Ignore delete events.
+
+
 0.7.2 (2017-08-04)
 ==================
 

@@ -16,6 +16,7 @@ run:
 	@build/bin/python \
 		scripts/start-chevah-github-hooks.py \
 		build/test_credentials \
+		--port tcp:10041 \
 		--nodaemon
 
 
@@ -30,5 +31,5 @@ lint:
 	@build/bin/pep8 chevah/ scripts/
 
 
-test: lint
-	@build/bin/python setup.py test
+test:
+	@build/bin/nosetests chevah.github_hooks_server.tests -v --with-id

@@ -6,6 +6,7 @@ chevah/github_hooks_server/tests/private.py
 
 
 # Generic ingore.
+.noseids
 *.py[co]
 build/
 dist/

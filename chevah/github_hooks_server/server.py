@@ -9,9 +9,9 @@ except ImportError:
     import simplejson as json
 
 from klein import resource, route
-from twisted.python import log
 
 from cidr import get_IP_list
+from chevah.github_hooks_server import log
 from chevah.github_hooks_server.handler import Handler
 from chevah.github_hooks_server.configuration import CONFIGURATION
 from chevah.github_hooks_server.buildbot_try import BuildbotTryNotifier
@@ -166,6 +166,7 @@ def parse_request(request, event_name):
 credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
 handler = Handler(
     trac_url='https://%s/login/xmlrpc' % (credentials_and_address, ),
+    github_token=CONFIGURATION['github-token'],
     )
 
 

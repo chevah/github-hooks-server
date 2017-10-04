@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.7.2'
+VERSION = '0.8.0'
 
 
 class PublishCommand(Command):
@@ -47,7 +47,6 @@ distribution = setup(
     install_requires=[
         'future',
         'klein==17.2',
-        'pygithub==1.34',
         ],
     extras_require = {
         'dev': [

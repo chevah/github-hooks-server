@@ -5,7 +5,7 @@ Tests for Trac integrations.
 from unittest import TestCase
 
 from chevah.github_hooks_server.utils.trac import Trac
-from chevah.github_hooks_server.test import private
+from chevah.github_hooks_server.tests import private
 
 
 # Tests are done against the staging server.
