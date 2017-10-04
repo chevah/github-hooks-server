@@ -27,4 +27,6 @@ CONFIGURATION = {
     'buildbot-master': 'localhost:1080',
     'buildbot-credentials': 'user:password',
 
+    # GitHub API key used by react on GitHub.
+    'github-api': 'set-a-token'
     }

@@ -3,6 +3,7 @@ Custom logic for handling GitHub hooks.
 """
 import re
 
+from github import Github
 from twisted.python import log
 
 from chevah.github_hooks_server.utils.trac import Trac, TracException
@@ -31,11 +32,13 @@ class Handler(object):
     # Helper for tests.
     _current_ticket = None
 
-    def __init__(self, trac_url):
+    def __init__(self, trac_url, github_token):
         if trac_url == 'mock':
             self.trac = None
         else:
             self.trac = Trac(login_url=trac_url)
+
+        self._github = Github(github_token, user_agent='pygithub/chevah-hooks')
 
     def dispatch(self, event):
         """
@@ -99,16 +102,18 @@ class Handler(object):
             self._setApproveChanges(ticket_id, user, body, reviewers)
         elif state == 'changes_requested':
             # An needs changes review comment.
-            self._setNeedsChanges(ticket_id, user, body)
+            self._setNeedsChanges(repo, ticket_id, user, body)
         else:
             # Just a simple comment.
             # Do nothing
             return
 
-    def _setNeedsChanges(self, ticket_id, user, body):
+    def _setNeedsChanges(self, repo, ticket_id, user, body):
         """
         Set the ticket with `ticket_id` in needs changes state.
         """
+        repo = self._github.get_repo(repo)
+
         ticket = self.trac.getTicket(ticket_id)
         comment = u'%s needs-changes to this ticket.\n\n%s' % (
             user, body)
@@ -169,7 +174,7 @@ class Handler(object):
             self._current_ticket = ticket
 
         elif self._needsChanges(body):
-            self._setNeedsChanges(ticket_id, user, body)
+            self._setNeedsChanges(repo, ticket_id, user, body)
 
         elif self._changesApproved(body):
             self._setApproveChanges(ticket_id, user, body, reviewers)

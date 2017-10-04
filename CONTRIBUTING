@@ -19,7 +19,7 @@ Manual starting
 --------------
 
 You can manually launch it on your dev system.
-In this env it can't do to many things as it needs access to Trac instance and
+In this env it can't do many things as it needs access to Trac instance and
 buildbot instance.
 
 You will need a trac and a buildbot set up.

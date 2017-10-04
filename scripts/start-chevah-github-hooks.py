@@ -54,6 +54,7 @@ if __name__ == '__main__':
         CONFIGURATION['trac-url'] = lines[0].strip()
         CONFIGURATION['buildbot-master'] = lines[1].strip()
         CONFIGURATION['buildbot-credentials'] = lines[2].strip()
+        CONFIGURATION['github-api'] = lines[3].strip()
 
     base_arguments = []
     web_arguments = []

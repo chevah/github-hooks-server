@@ -47,6 +47,7 @@ distribution = setup(
     install_requires=[
         'future',
         'klein==17.2',
+        'pygithub==1.34',
         ],
     extras_require = {
         'dev': [

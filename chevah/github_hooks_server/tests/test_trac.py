@@ -5,12 +5,11 @@ Tests for Trac integrations.
 from unittest import TestCase
 
 from chevah.github_hooks_server.utils.trac import Trac
+from chevah.github_hooks_server.test import private
 
 
 # Tests are done against the staging server.
-_login_url = (
-    "https://pqm-staging:pqmisthebest@trac-staging.chevah.com/login/xmlrpc"
-    )
+_login_url = private.trac_login_url
 
 
 class TestTrac(TestCase):
