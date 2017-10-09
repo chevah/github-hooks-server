@@ -204,6 +204,34 @@ class TestHandler(TestCase):
             b'Simple words for simple persons r\xc3\x89sume.'
             )
 
+    def test_issue_comment_no_create(self):
+        """
+        Noting happen if comment was not created, but rather edited or removed,
+        so that we don't trigger the same action multiple times.
+        """
+        content = {
+            'action': 'deleted',
+            u'issue': {
+                u'pull_request': {u'html_url': u'something'},
+                u'title': u'[#12] Some message r\xc9sume.',
+                u'body': '',
+                'number': 123,
+                'user': {'login': 'ignored'},
+                },
+            u'comment': {
+                u'user': {u'login': u'somebody'},
+                u'body': u'Simple words for simple persons r\xc9sume.',
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+        event = Event(hook='some', name='issue_comment', content=content)
+
+        self.handler.dispatch(event)
+
+        self.assertLog(b'[%s] Not a created issue comment.')
+
     def test_pull_request_review_no_ticket_in_title(self):
         """
         Nothing happens when the PR title does not contain a ticket.
@@ -235,6 +263,34 @@ class TestHandler(TestCase):
         self.assertFalse(self.handler.trac.getTicket.called)
         self.assertLog(
             b'Pull request has no ticket id in title: Some message.')
+
+    def test_pull_request_review_no_submit_action(self):
+        """
+        Nothing happens when the action is not one of submission.
+        """
+        content = {
+            'action': 'dismissed',
+            'pull_request': {
+                'title': 'Some message.',
+                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
+                'number': 8,
+                'user': {'login': 'adiroiban'},
+                },
+            'review': {
+                'user': {'login': 'tu'},
+                'body': 'anything here.',
+                'state': 'changes_requested',
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+        event = Event(hook='some', name='pull_request_review', content=content)
+
+        self.handler.dispatch(event)
+
+        self.assertLog(b'[some] Not review submission.')
+
 
 #
 # --------------------- needs-review ------------------------------------------

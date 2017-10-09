@@ -91,6 +91,10 @@ class Handler(object):
         """
         Called when a PR review overview message is left.
         """
+        if event.content.get('action', 'submitted') != 'submitted':
+            log.msg('[%s] Not review submission.' % (event.hook))
+            return
+
         title = event.content['pull_request']['title']
         ticket_id = self._getTicketFromTitle(title)
         if not ticket_id:
@@ -139,10 +143,13 @@ class Handler(object):
         # Do the GitHub stuff
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, issue_id)
-        issue.add_labels('needs-review')
-        self._removeLabels(issue, ['needs-changes', 'needs-merge'])
-        gh_users = [self._getGitHubUser(r) for r in reviewers]
-        issue.edit(assignees=gh_users)
+        if issue:
+            issue.add_labels('needs-review')
+            self._removeLabels(issue, ['needs-changes', 'needs-merge'])
+            gh_users = [self._getGitHubUser(r) for r in reviewers]
+            issue.edit(assignees=gh_users)
+        else:
+            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
         # Do the Trac stuff.
         ticket = self.trac.getTicket(ticket_id)
@@ -161,9 +168,12 @@ class Handler(object):
         # Do the GitHub stuff
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, issue_id)
-        issue.add_labels('needs-changes')
-        self._removeLabels(issue, ['needs-review', 'needs-merge'])
-        issue.edit(assignees=[author_name])
+        if issue:
+            issue.add_labels('needs-changes')
+            self._removeLabels(issue, ['needs-review', 'needs-merge'])
+            issue.edit(assignees=[author_name])
+        else:
+            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
         # Do the Trac stuff.
         ticket = self.trac.getTicket(ticket_id)
@@ -183,19 +193,23 @@ class Handler(object):
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, issue_id)
 
-        current_reviewers = set([u.login for u in issue.assignees])
-        remaining_reviewers = (
-            current_reviewers -
-            set([self._getGitHubUser(reviewer_name)])
-            )
+        if issue:
+            current_reviewers = set([u.login for u in issue.assignees])
+            remaining_reviewers = (
+                current_reviewers -
+                set([self._getGitHubUser(reviewer_name)])
+                )
 
-        if not remaining_reviewers:
-            # All reviewers done
-            issue.add_labels('needs-merge')
-            self._removeLabels(issue, ['needs-review', 'needs-changes'])
-            issue.edit(assignees=[author_name])
+            if not remaining_reviewers:
+                # All reviewers done
+                issue.add_labels('needs-merge')
+                self._removeLabels(issue, ['needs-review', 'needs-changes'])
+                issue.edit(assignees=[author_name])
+            else:
+                issue.edit(assignees=list(remaining_reviewers))
+
         else:
-            issue.edit(assignees=list(remaining_reviewers))
+            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
         # Do the Trac stuff.
         ticket = self.trac.getTicket(ticket_id)
@@ -222,7 +236,7 @@ class Handler(object):
         command and sync state with trac.
         """
         if event.content.get('action', 'created') != 'created':
-            log.msg('[%s] Not a created issue comment' % (event.hook))
+            log.msg('[%s] Not a created issue comment.' % (event.hook))
             return
 
         pull_url = event.content['issue']['pull_request']['html_url']

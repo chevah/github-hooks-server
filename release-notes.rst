@@ -1,3 +1,11 @@
+0.8.2 (2017-10-04)
+==================
+
+* Add a log when failing to fetch the issue.
+* Only trigger on review requests and comment creation. Not on edit, delete,
+  dismiss.
+
+
 0.8.1 (2017-10-04)
 ==================
 
