@@ -21,7 +21,6 @@ class Handler(object):
     USERS_GITHUB_TO_TRAC = {
         'adiroiban': 'adi',
         'lgheorghiu': 'laura',
-        'brunogola': 'bgola',
         'hcs0': 'hcs',
         }
 
