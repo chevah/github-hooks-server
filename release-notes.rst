@@ -1,3 +1,31 @@
+0.8.3 (2017-11-02)
+==================
+
+* Update Bruno's handle.
+
+
+0.8.2 (2017-10-04)
+==================
+
+* Add a log when failing to fetch the issue.
+* Only trigger on review requests and comment creation. Not on edit, delete,
+  dismiss.
+
+
+0.8.1 (2017-10-04)
+==================
+
+* Declare missing github3.py dependencies in our setup.py
+
+
+0.8.0 (2017-10-04)
+==================
+
+* Manage labels on GitHub to get some review state.
+* Ignore delete events.
+* Remove dependency to future.
+
+
 0.7.2 (2017-08-04)
 ==================
 

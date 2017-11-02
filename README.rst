@@ -5,10 +5,12 @@ Custom handling of GitHub hooks for Chevah Project.
 
 It keeps Trac and GitHub in sync based on Chevah's own workflow.
 
-To launch the server you will need to store the Trac credentials:ip in a file.
-See `scripts/start-chevah-github-hooks.py` for usage.
+It manages the labels for a PR to keep track of the review state for a PR.
 
-The code is public but the package is private. It is not / and should not
-be published on PyPi.
+The GitHub Token needs to have write permissions to the managed repo.
+
+The code is public but the package is private.
+It is not / and should not be published on PyPi.
+
 Also tests are designed to run from Chevah VPN with access to staging Trac
 instance.

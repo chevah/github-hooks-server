@@ -1,10 +1,13 @@
 """
 Custom logic for handling GitHub hooks.
 """
+from __future__ import unicode_literals
 import re
 
-from twisted.python import log
+from github3 import login
 
+
+from chevah.github_hooks_server import log
 from chevah.github_hooks_server.utils.trac import Trac, TracException
 
 
@@ -18,7 +21,6 @@ class Handler(object):
     USERS_GITHUB_TO_TRAC = {
         'adiroiban': 'adi',
         'lgheorghiu': 'laura',
-        'brunogola': 'bgola',
         'hcs0': 'hcs',
         }
 
@@ -31,11 +33,15 @@ class Handler(object):
     # Helper for tests.
     _current_ticket = None
 
-    def __init__(self, trac_url):
+    def __init__(self, trac_url, github_token):
         if trac_url == 'mock':
             self.trac = None
         else:
             self.trac = Trac(login_url=trac_url)
+
+        self._github = login(token=github_token)
+        if not self._github:
+            raise RuntimeError('Failed to init GitHut.')
 
     def dispatch(self, event):
         """
@@ -84,54 +90,140 @@ class Handler(object):
         """
         Called when a PR review overview message is left.
         """
+        if event.content.get('action', 'submitted') != 'submitted':
+            log.msg('[%s] Not review submission.' % (event.hook))
+            return
+
         title = event.content['pull_request']['title']
         ticket_id = self._getTicketFromTitle(title)
         if not ticket_id:
             return
 
+        state = event.content['review']['state']
+        repo = event.content['repository']['full_name']
+        issue_id = event.content['pull_request']['number']
+        author_name = event.content['pull_request']['user']['login']
         body = event.content['review']['body']
-        user = self._getTracUser(event.content['review']['user']['login'])
+        reviewer_name = self._getTracUser(
+            event.content['review']['user']['login'])
+
         reviewers = self._getReviewers(event.content['pull_request']['body'])
 
-        state = event.content['review']['state']
+        log.msg(u'[%s][%d] New review from %s as %s\n%s' % (
+            event.hook, ticket_id, reviewer_name, state, body))
+
         if state == 'approved':
             # An approved review comment.
-            self._setApproveChanges(ticket_id, user, body, reviewers)
+            self._setApproveChanges(
+                repo, ticket_id, issue_id, author_name, reviewer_name, body,
+                reviewers,
+                )
         elif state == 'changes_requested':
             # An needs changes review comment.
-            self._setNeedsChanges(ticket_id, user, body)
+            self._setNeedsChanges(
+                repo, ticket_id, issue_id, author_name, reviewer_name, body)
         else:
             # Just a simple comment.
             # Do nothing
             return
 
-    def _setNeedsChanges(self, ticket_id, user, body):
+    def _removeLabels(self, issue, labels):
+        """
+        Remove labels from the issue.
+        """
+        for label in labels:
+            issue.remove_label(label)
+
+    def _setNeedsReview(
+            self, repo, ticket_id, issue_id, user, body, reviewers, pull_url):
+        """
+        Set the ticket to needs review.
+        """
+        # Do the GitHub stuff
+        username, repository = repo.split('/', 1)
+        issue = self._github.issue(username, repository, issue_id)
+        if issue:
+            issue.add_labels('needs-review')
+            self._removeLabels(issue, ['needs-changes', 'needs-merge'])
+            gh_users = [self._getGitHubUser(r) for r in reviewers]
+            issue.edit(assignees=gh_users)
+        else:
+            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
+
+        # Do the Trac stuff.
+        ticket = self.trac.getTicket(ticket_id)
+        comment = u'%s requested the review of this ticket.\n\n%s' % (
+            user, body)
+        cc = ', '.join(reviewers)
+        ticket.requestReview(
+            comment=comment, cc=cc, pull_url=pull_url)
+        self._current_ticket = ticket
+
+    def _setNeedsChanges(
+            self, repo, ticket_id, issue_id, author_name, reviewer_name, body):
         """
         Set the ticket with `ticket_id` in needs changes state.
         """
+        # Do the GitHub stuff
+        username, repository = repo.split('/', 1)
+        issue = self._github.issue(username, repository, issue_id)
+        if issue:
+            issue.add_labels('needs-changes')
+            self._removeLabels(issue, ['needs-review', 'needs-merge'])
+            issue.edit(assignees=[author_name])
+        else:
+            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
+
+        # Do the Trac stuff.
         ticket = self.trac.getTicket(ticket_id)
         comment = u'%s needs-changes to this ticket.\n\n%s' % (
-            user, body)
+            reviewer_name, body)
         ticket.requestChanges(comment=comment)
         self._current_ticket = ticket
 
-    def _setApproveChanges(self, ticket_id, user, body, reviewers):
+    def _setApproveChanges(
+            self, repo, ticket_id, issue_id, author_name, reviewer_name, body,
+            reviewers,
+            ):
         """
         Update the ticket with `ticket_id` as approved.
         """
+        # Do the GitHub stuff
+        username, repository = repo.split('/', 1)
+        issue = self._github.issue(username, repository, issue_id)
+
+        if issue:
+            current_reviewers = set([u.login for u in issue.assignees])
+            remaining_reviewers = (
+                current_reviewers -
+                set([self._getGitHubUser(reviewer_name)])
+                )
+
+            if not remaining_reviewers:
+                # All reviewers done
+                issue.add_labels('needs-merge')
+                self._removeLabels(issue, ['needs-review', 'needs-changes'])
+                issue.edit(assignees=[author_name])
+            else:
+                issue.edit(assignees=list(remaining_reviewers))
+
+        else:
+            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
+
+        # Do the Trac stuff.
         ticket = self.trac.getTicket(ticket_id)
         remaining_reviewers = self._getRemainingReviewers(
-            ticket.attributes['cc'], user)
+            ticket.attributes['cc'], reviewer_name)
         if not remaining_reviewers:
             comment = (
                 u'%s changes-approved.\n'
                 u'No more reviewers.\n'
                 u'Ready to merge.\n\n%s' % (
-                    user, body))
+                    reviewer_name, body))
             cc = ', '.join(reviewers)
             ticket.requestMerge(comment=comment, cc=cc)
         else:
-            comment = u'%s changes-approved.\n\n%s' % (user, body)
+            comment = u'%s changes-approved.\n\n%s' % (reviewer_name, body)
             ticket.update(
                 attributes={'cc': ', '.join(remaining_reviewers)},
                 comment=comment)
@@ -142,10 +234,17 @@ class Handler(object):
         At comments on issues which are pull request, check for
         command and sync state with trac.
         """
+        if event.content.get('action', 'created') != 'created':
+            log.msg('[%s] Not a created issue comment.' % (event.hook))
+            return
+
         pull_url = event.content['issue']['pull_request']['html_url']
         if not pull_url:
             log.msg('[%s] Not a comment on a pull request' % (event.hook))
             return
+
+        repo = event.content['repository']['full_name']
+        issue_id = event.content['issue']['number']
 
         message = event.content['issue']['title']
         ticket_id = self._getTicketFromTitle(message)
@@ -153,26 +252,31 @@ class Handler(object):
             return
 
         body = event.content['comment']['body']
-        user = self._getTracUser(event.content['comment']['user']['login'])
+        reviewer_name = self._getTracUser(
+            event.content['comment']['user']['login'])
+
+        author_name = event.content['issue']['user']['login']
+
         reviewers = self._getReviewers(event.content['issue']['body'])
 
-        log.msg((u'[%s][%d] New comment from %s with reviewers %s\n%s' % (
-            event.hook, ticket_id, user, reviewers, body)).encode('utf-8'))
+        log.msg(u'[%s][%d] New comment from %s with reviewers %s\n%s' % (
+            event.hook, ticket_id, reviewer_name, reviewers, body))
 
         if self._needsReview(body):
-            ticket = self.trac.getTicket(ticket_id)
-            comment = u'%s requested the review of this ticket.\n\n%s' % (
-                user, body)
-            cc = ', '.join(reviewers)
-            ticket.requestReview(
-                comment=comment, cc=cc, pull_url=pull_url)
-            self._current_ticket = ticket
+            self._setNeedsReview(
+                repo, ticket_id, issue_id, reviewer_name, body, reviewers,
+                pull_url,
+                )
 
         elif self._needsChanges(body):
-            self._setNeedsChanges(ticket_id, user, body)
+            self._setNeedsChanges(
+                repo, ticket_id, issue_id, author_name, reviewer_name, body)
 
         elif self._changesApproved(body):
-            self._setApproveChanges(ticket_id, user, body, reviewers)
+            self._setApproveChanges(
+                repo, ticket_id, issue_id, author_name, reviewer_name, body,
+                reviewers,
+                )
 
     def _getTicketFromTitle(self, text):
         """
@@ -222,6 +326,15 @@ class Handler(object):
             return self.USERS_GITHUB_TO_TRAC[git_login]
         except KeyError:
             return git_login
+
+    def _getGitHubUser(self, trac_login):
+        """
+        Return the GitHub ID based on trac ID.
+        """
+        for key, value in self.USERS_GITHUB_TO_TRAC.items():
+            if value.lower() == trac_login.lower():
+                return key
+        return trac_login
 
     def _needsChanges(self, content):
         """

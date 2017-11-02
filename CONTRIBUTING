@@ -1,6 +1,11 @@
 Development
 -----------
 
+To launch the server you will need to store the secrets in a file.
+See `scripts/start-chevah-github-hooks.py` for usage.
+
+The passwords to Trac and GitHub are protected using git-secret.
+
 If starting with a clean repo, install virtualenv and dev requirements::
 
     make deps
@@ -19,7 +24,7 @@ Manual starting
 --------------
 
 You can manually launch it on your dev system.
-In this env it can't do to many things as it needs access to Trac instance and
+In this env it can't do many things as it needs access to Trac instance and
 buildbot instance.
 
 You will need a trac and a buildbot set up.
@@ -44,3 +49,12 @@ GitHub.com.
 Trigger the payload push using::
 
     make payload
+
+
+Manual hook redirection
+-----------------------
+
+In GitHub you can set up the hook for http://PUBLIC.IP:10041/hook/test
+and then set up port forwarding::
+
+    ssh -N -T -R 0.0.0.0:10041:localhost:10041 user@PUBLIC.IP

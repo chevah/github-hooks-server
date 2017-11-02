@@ -16,7 +16,6 @@ import logging
 
 
 from twisted.scripts.twistd import run
-from twisted.logger import globalLogPublisher
 from twisted.python import log, failure
 
 from chevah.github_hooks_server.configuration import CONFIGURATION
@@ -54,6 +53,7 @@ if __name__ == '__main__':
         CONFIGURATION['trac-url'] = lines[0].strip()
         CONFIGURATION['buildbot-master'] = lines[1].strip()
         CONFIGURATION['buildbot-credentials'] = lines[2].strip()
+        CONFIGURATION['github-token'] = lines[3].strip()
 
     base_arguments = []
     web_arguments = []
@@ -73,8 +73,6 @@ if __name__ == '__main__':
         '--class', 'chevah.github_hooks_server.server.resource',
         ])
     sys.argv.extend(web_arguments)
-
-
 
     # Set up forwarding of stdlib logs to Twisted.
     logger = logging.getLogger()
