@@ -10,7 +10,6 @@ except ImportError:
 
 from klein import resource, route
 
-from cidr import get_IP_list
 from chevah.github_hooks_server import log
 from chevah.github_hooks_server.handler import Handler
 from chevah.github_hooks_server.configuration import CONFIGURATION
@@ -18,20 +17,6 @@ from chevah.github_hooks_server.buildbot_try import BuildbotTryNotifier
 
 # Shut up the linter.
 resource
-
-
-def expand_allowed_ips():
-    """
-    Expand the cached list of allowed ips.
-    """
-    CONFIGURATION['_allowed_ips'] = {}
-
-    for block in CONFIGURATION['allow_cidr']:
-        for ip in get_IP_list(block):
-            CONFIGURATION['_allowed_ips'][ip] = True
-
-# Do initial expansion.
-expand_allowed_ips()
 
 
 class Event(object):

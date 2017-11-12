@@ -9,7 +9,7 @@ twistd arguments are only supported in `--option=X` format.
 It also support some non-web twistd commands.
 
 twistd web does not allow passing any extra arguments so we pass them via
-the CONFIGURATION global.
+the configuration file.
 """
 import sys
 import logging
@@ -18,7 +18,7 @@ import logging
 from twisted.scripts.twistd import run
 from twisted.python import log, failure
 
-from chevah.github_hooks_server.configuration import CONFIGURATION
+from chevah.github_hooks_server.configuration import load_configuration
 
 
 class TwistedLogHandler(logging.Handler):
@@ -47,13 +47,7 @@ if __name__ == '__main__':
             'Launch script with at least path to file holding Trac '
             'credentials.')
 
-    # Read Trac credentials and address.
-    with open(sys.argv[1], 'r') as file:
-        lines = file.readlines()
-        CONFIGURATION['trac-url'] = lines[0].strip()
-        CONFIGURATION['buildbot-master'] = lines[1].strip()
-        CONFIGURATION['buildbot-credentials'] = lines[2].strip()
-        CONFIGURATION['github-token'] = lines[3].strip()
+    load_configuration(sys.argv[1])
 
     base_arguments = []
     web_arguments = []

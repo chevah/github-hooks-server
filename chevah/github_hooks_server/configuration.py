@@ -1,16 +1,23 @@
-CONFIGURATION = {
-    # Update it from https://api.github.com/meta
-    'allow_cidr': [
-        '127.0.0.1/24',
-        "207.97.227.253/32",
-        "50.57.128.197/32",
-        "108.171.174.178/32",
-        "50.57.231.61/32",
-        "204.232.175.64/27",
-        "192.30.252.0/22",
-        ],
-    'callback': None,
+from cidr import get_IP_list
+import toml
 
+
+def load_configuration(path):
+    parsed = toml.load(path)
+    if not parsed['chevah'] and not parsed['chevah']['github_hooks_server']:
+        raise RuntiemError('Config section not found.')
+
+    config = parsed['chevah']['github_hooks_server']
+
+    # Do initial expansion.
+    allowed_ips = config.pop('allowed-cidr')
+    _expand_allowed_ips(CONFIGURATION, allowed_ips)
+
+    CONFIGURATION.update(config)
+
+
+# This should be private.
+CONFIGURATION = {
     # Cached list of allowed IP address.
     # Expanded at startup based on CIDR.
     # call `expand_allowed_ips()` if `allow_cidr` is changed at runtime.
@@ -30,3 +37,15 @@ CONFIGURATION = {
     # GitHub API key used by react on GitHub.
     'github-token': 'set-a-token'
     }
+
+
+def _expand_allowed_ips(configuration, new_value):
+    """
+    Expand the cached list of allowed ips.
+    """
+    configuration['_allowed_ips'] = {}
+
+    for block in new_value:
+        for ip in get_IP_list(block):
+            configuration['_allowed_ips'][ip] = True
+

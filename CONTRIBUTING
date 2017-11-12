@@ -28,11 +28,10 @@ In this env it can't do many things as it needs access to Trac instance and
 buildbot instance.
 
 You will need a trac and a buildbot set up.
-Create a `build/test_credentials` with the following details on each line:
+Start with a config file based on the sample config and then edit it to
+match your dev env:
 
-* trac credentials
-* buildbot address:port
-* buildmaster PR account
+    cp config.toml build/config.toml
 
 To launch the server use:
 

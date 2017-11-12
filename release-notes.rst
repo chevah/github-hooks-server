@@ -1,3 +1,11 @@
+0.9.0 (2017-11-12)
+==================
+
+* Add configuration file.
+* Allow changing the review workflow for PR without a Trac ticket.
+
+
+
 0.8.3 (2017-11-02)
 ==================
 

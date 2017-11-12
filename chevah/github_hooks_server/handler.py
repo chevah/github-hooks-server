@@ -96,8 +96,6 @@ class Handler(object):
 
         title = event.content['pull_request']['title']
         ticket_id = self._getTicketFromTitle(title)
-        if not ticket_id:
-            return
 
         state = event.content['review']['state']
         repo = event.content['repository']['full_name']
@@ -151,6 +149,10 @@ class Handler(object):
             log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
         # Do the Trac stuff.
+        if not ticket_id:
+            # No associated Trac ticket.
+            return
+
         ticket = self.trac.getTicket(ticket_id)
         comment = u'%s requested the review of this ticket.\n\n%s' % (
             user, body)
@@ -175,6 +177,10 @@ class Handler(object):
             log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
         # Do the Trac stuff.
+        if not ticket_id:
+            # No associated Trac ticket.
+            return
+
         ticket = self.trac.getTicket(ticket_id)
         comment = u'%s needs-changes to this ticket.\n\n%s' % (
             reviewer_name, body)
@@ -211,6 +217,10 @@ class Handler(object):
             log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
         # Do the Trac stuff.
+        if not ticket_id:
+            # No associated Trac ticket.
+            return
+
         ticket = self.trac.getTicket(ticket_id)
         remaining_reviewers = self._getRemainingReviewers(
             ticket.attributes['cc'], reviewer_name)
@@ -248,8 +258,6 @@ class Handler(object):
 
         message = event.content['issue']['title']
         ticket_id = self._getTicketFromTitle(message)
-        if not ticket_id:
-            return
 
         body = event.content['comment']['body']
         reviewer_name = self._getTracUser(

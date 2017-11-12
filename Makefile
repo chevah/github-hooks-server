@@ -17,7 +17,7 @@ deps: env
 run:
 	@build/bin/python \
 		scripts/start-chevah-github-hooks.py \
-		build/test_credentials \
+		build/config.toml \
 		--port tcp:10041 \
 		--nodaemon
 
