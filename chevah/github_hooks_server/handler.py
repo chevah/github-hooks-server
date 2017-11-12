@@ -107,7 +107,7 @@ class Handler(object):
 
         reviewers = self._getReviewers(event.content['pull_request']['body'])
 
-        log.msg(u'[%s][%d] New review from %s as %s\n%s' % (
+        log.msg(u'[%s][%s] New review from %s as %s\n%s' % (
             event.hook, ticket_id, reviewer_name, state, body))
 
         if state == 'approved':
@@ -267,7 +267,7 @@ class Handler(object):
 
         reviewers = self._getReviewers(event.content['issue']['body'])
 
-        log.msg(u'[%s][%d] New comment from %s with reviewers %s\n%s' % (
+        log.msg(u'[%s][%s] New comment from %s with reviewers %s\n%s' % (
             event.hook, ticket_id, reviewer_name, reviewers, body))
 
         if self._needsReview(body):

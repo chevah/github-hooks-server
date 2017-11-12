@@ -5,7 +5,7 @@ import toml
 def load_configuration(path):
     parsed = toml.load(path)
     if not parsed['chevah'] and not parsed['chevah']['github_hooks_server']:
-        raise RuntiemError('Config section not found.')
+        raise RuntimeError('Config section not found.')
 
     config = parsed['chevah']['github_hooks_server']
 
@@ -48,4 +48,3 @@ def _expand_allowed_ips(configuration, new_value):
     for block in new_value:
         for ip in get_IP_list(block):
             configuration['_allowed_ips'][ip] = True
-
