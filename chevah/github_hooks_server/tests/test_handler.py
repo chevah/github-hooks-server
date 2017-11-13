@@ -147,7 +147,8 @@ class TestHandler(TestCase):
 
     def test_issue_comment_no_ticket(self):
         """
-        Nothing happens if the pull request title does not contain a ticket.
+        It will ignore the fact that the title has no associated Trac ticket
+        and will just process the requested action to the hooked PR.
         """
         content = {
             u'issue': {
@@ -155,10 +156,11 @@ class TestHandler(TestCase):
                 u'title': u'Some message r\xc9sume.',
                 u'body': u'r\xc9sume',
                 'number': 123,
+                'user': {'login': 'some-guy'},
                 },
             u'comment': {
                 u'user': {u'login': u'somebody'},
-                u'body': 'r\xc9sume **needs-review**',
+                u'body': 'r\xc9sume no action',
                 },
             'repository': {
                 'full_name': 'chevah/github-hooks-server',
@@ -169,9 +171,15 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertFalse(self.handler.trac.getTicket.called)
+        # Inform that Trac sync is not done.
         self.assertLog(
             b'Pull request has no ticket id in title: '
             b'Some message r\xc3\x89sume.'
+            )
+        # Inform that event is going to be processed.
+        self.assertLog(
+            b'[some][None] New comment from somebody with reviewers []'
+            b'\nr\xc3\x89sume no action'
             )
 
     def test_issue_comment_no_marker(self):
@@ -230,11 +238,12 @@ class TestHandler(TestCase):
 
         self.handler.dispatch(event)
 
-        self.assertLog(b'[%s] Not a created issue comment.')
+        self.assertLog(b'[some] Not a created issue comment.')
 
     def test_pull_request_review_no_ticket_in_title(self):
         """
-        Nothing happens when the PR title does not contain a ticket.
+        Will process the PR request by updating the PR even if the PR title
+        is not associated with a Trac Ticket..
         """
         content = {
             'pull_request': {
@@ -263,6 +272,10 @@ class TestHandler(TestCase):
         self.assertFalse(self.handler.trac.getTicket.called)
         self.assertLog(
             b'Pull request has no ticket id in title: Some message.')
+        self.assertLog(
+            b'[some][None] New review from tu as changes_requested\n'
+            b'anything here.'
+            )
 
     def test_pull_request_review_no_submit_action(self):
         """
