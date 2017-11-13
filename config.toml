@@ -1,7 +1,7 @@
 [chevah.github_hooks_server]
 
 # Update it from https://api.github.com/meta
-allowed_cidr: [
+allowed-cidr: [
         "127.0.0.1/24",
         "207.97.227.253/32",
         "50.57.128.197/32",
@@ -13,15 +13,15 @@ allowed_cidr: [
 
 
 # URL to Trac XML-RPC API.
-trac-url: mock
+trac-url: "mock"
 
 # Details for the GitHub server from which hooks are received.
-github-server: github.com
-github-hook-secret: None
-# GitHub API key used by react on GitHub.
-github-token: set-a-token
+github-server = "github.com"
+# Leave empty to not have a secret.
+github-hook-secret = ""
+github-token = "a-token"
 
 
 # Address and credentails for the Buildmaster perspective broker.
-buildbot-master: localhost:1080
-buildbot-credentials: user:password
+buildbot-master: "localhost:1080"
+buildbot-credentials: "user:password"

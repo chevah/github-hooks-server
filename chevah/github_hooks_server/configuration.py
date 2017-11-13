@@ -15,6 +15,10 @@ def load_configuration(path):
 
     CONFIGURATION.update(config)
 
+    # Fix handling of None value.
+    if not CONFIGURATION['github-hook-secret']:
+        CONFIGURATION['github-hook-secret'] = None
+
 
 # This should be private.
 CONFIGURATION = {

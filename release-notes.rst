@@ -1,3 +1,10 @@
+0.9.1 (2017-11-13)
+==================
+
+* Fix GitHub token when not set. Use None instead of empty string for internal
+  handling.
+
+
 0.9.0 (2017-11-12)
 ==================
 
