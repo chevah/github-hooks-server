@@ -1,0 +1,27 @@
+[chevah.github_hooks_server]
+
+# Update it from https://api.github.com/meta
+allowed-cidr = [
+        "127.0.0.1/24",
+        "207.97.227.253/32",
+        "50.57.128.197/32",
+        "108.171.174.178/32",
+        "50.57.231.61/32",
+        "204.232.175.64/27",
+        "192.30.252.0/22",
+        ]
+
+
+# URL to Trac XML-RPC API.
+trac-url = "mock"
+
+# Details for the GitHub server from which hooks are received.
+github-server = "github.com"
+# Leave empty to not have a secret.
+github-hook-secret = ""
+github-token = "a-token"
+
+
+# Address and credentails for the Buildmaster perspective broker.
+buildbot-master = "localhost:10087"
+buildbot-credentials = "user:password"

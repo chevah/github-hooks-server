@@ -41,9 +41,10 @@ To launch the server use:
 Manual hook replay
 ------------------
 
-In build/ folder create build/payload_headers and build/payload_content files
+In test/ folder update `payload_headers` and `payload_content` files
 in which you can put the content based on the content that you find on
 GitHub.com.
+
 
 Trigger the payload push using::
 
@@ -56,4 +57,4 @@ Manual hook redirection
 In GitHub you can set up the hook for http://PUBLIC.IP:10041/hook/test
 and then set up port forwarding::
 
-    ssh -N -T -R 0.0.0.0:10041:localhost:10041 user@PUBLIC.IP
+    ssh -N -T -R 0.0.0.0:8080:localhost:8080 user@PUBLIC.IP

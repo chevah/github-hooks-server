@@ -1,3 +1,9 @@
+0.10.0 (2018-11-25)
+==================
+
+* Add support for skipping a commit with '[skip ci]', '[skip buildbot]'.
+
+
 0.9.1 (2017-11-13)
 ==================
 

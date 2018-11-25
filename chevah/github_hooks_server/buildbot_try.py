@@ -140,7 +140,10 @@ class BuildbotTryNotifier(GitHubBuildBot):
         for key, value in change.items():
             logging.debug("  %s: %s", key, value)
 
-        if change['branch'] == 'master' or change['pr'] is not None:
+        if _has_skip_marker(change['comments']):
+            deferred = defer.succeed(None)
+            logging.debug('Skip change: %s' % change['comments'])
+        elif change['branch'] == 'master' or change['pr'] is not None:
             # Only trigger if it was pushed on master or PR.
             deferred = remote.callRemote(
                 'try',
@@ -161,3 +164,19 @@ class BuildbotTryNotifier(GitHubBuildBot):
 
         deferred.addCallback(lambda _: self.addChange(remote, changei))
         return deferred
+
+
+def _has_skip_marker(comment):
+    """
+    Return true if `comment` has one of the skip markers.
+    * skip ci
+    * skip buildbot
+    """
+    comment = comment.lower()
+    if '[skip ci]' in comment or '[ci skip]' in comment:
+        return True
+
+    if '[skip buildbot]' in comment or '[buildbot skip]' in comment:
+        return True
+
+    return False

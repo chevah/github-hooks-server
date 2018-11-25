@@ -10,22 +10,22 @@ env:
 
 deps: env
 	@build/bin/pip install -Ue '.[dev]' \
-		--index-url http://deag.chevah.com:10042 \
-		--trusted-host deag.chevah.com
+		--index-url http://pypi.chevah.com/simple \
+		--trusted-host pypi.chevah.com
 
 
 run:
 	@build/bin/python \
 		scripts/start-chevah-github-hooks.py \
-		build/config.toml \
-		--port tcp:10041 \
+		test/config.toml \
+		--port tcp:8080 \
 		--nodaemon
 
 
-HEADERS := $(shell while read line; do echo -n "-H '$$line' "; done < build/payload_headers)
+HEADERS := $(shell while read line; do echo -n "-H '$$line' "; done < test/payload_headers)
 
 payload:
-	curl -v $(HEADERS) -d @build/payload_content localhost:8080/buildmaster
+	curl -v $(HEADERS) -d @test/payload_content localhost:8080/buildmaster
 
 
 lint:
