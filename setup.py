@@ -21,7 +21,7 @@ class PublishCommand(Command):
     def run(self):
         assert os.getcwd() == self.cwd, (
             'Must be in package root: %s' % self.cwd)
-        self.run_command('sdist')
+        self.run_command('bdist_wheel')
         # Upload package to Chevah PyPi server.
         upload_command = self.distribution.get_command_obj('upload')
         upload_command.repository = u'chevah'
