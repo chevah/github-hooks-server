@@ -1,4 +1,4 @@
-from cidr import get_IP_list
+from chevah.github_hooks_server.cidr import get_IP_list
 import toml
 
 

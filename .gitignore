@@ -13,3 +13,4 @@ virtualenv/
 *.egg-info/
 build/
 twistd.log
+node_modules/

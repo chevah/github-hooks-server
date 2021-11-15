@@ -1,6 +1,7 @@
 """
-This is the part where requests are dispached.
+This is the part where requests are dispatched.
 """
+
 try:
     import json
     # Shut up the linter.
@@ -8,15 +9,11 @@ try:
 except ImportError:
     import simplejson as json
 
-from klein import resource, route
-
 from chevah.github_hooks_server import log
 from chevah.github_hooks_server.handler import Handler
 from chevah.github_hooks_server.configuration import CONFIGURATION
-from chevah.github_hooks_server.buildbot_try import BuildbotTryNotifier
 
-# Shut up the linter.
-resource
+import azure.functions as func
 
 
 class Event(object):
@@ -48,47 +45,44 @@ class ServerException(Exception):
         self.message = message
 
 
-@route('/')
-def root(request):
-    """
-    Entry point.
-    """
-    return ''
-
-
-@route('/ping',  methods=['GET'])
-def ping(request):
+def ping(req: func.HttpRequest):
     """
     Simple resource to check that server is up.
     """
-    return 'pong'
+    return func.HttpResponse('pong')
 
 
-@route('/hook/<string:hook_name>',  methods=['POST'])
-def hook(request, hook_name):
+def pull_request_review(req: func.HttpRequest):
+    """
+    Called when a PR review overview message is left.
+    """
+    hook(req, hook_name='pull_request_review')
+
+
+def issue_comment(req: func.HttpRequest):
+    """
+    Called when a PR review overview message is left.
+    """
+    hook(req, hook_name='issue_comment')
+
+
+def hook(req: func.HttpRequest, hook_name):
     """
     Main hook entry point.
 
     Check that request is valid, parse the content and then pass
     the object for further processing.
     """
-    if request.getClientIP() not in CONFIGURATION['_allowed_ips']:
-        request.code = 403
-        log.msg(
-            'Receive request for hook "%(name)s" from unauthorized'
-            ' "%(ip)s".' % {'name': hook_name, 'ip': request.getClientIP()})
-        return "Error:001: Where are you comming from?"
-
-    event_name = request.getHeader('X-Github-Event')
+    event_name = req.headers['X-Github-Event']
     if not event_name:
         log.msg('No event name for "%(name)s". %(details)s' % {
-                'name': hook_name, 'details': request.getAllHeaders().items()})
+                'name': hook_name, 'details': dict(req.headers).items()})
         return "Error:004: What event is this?"
 
     content = None
     try:
-        content = parse_request(request, event_name)
-    except ServerException, error:
+        content = parse_request(req)
+    except ServerException as error:
         log.msg('Failed to get json for hook "%(name)s". %(details)s' % {
                 'name': hook_name, 'details': error.message})
         return "Error:002: Failed to get hook content."
@@ -114,17 +108,9 @@ def hook(request, hook_name):
     handle_event(event)
 
 
-@route('/buildmaster',  methods=['POST'])
-def buildmaster(request):
+def parse_request(req: func.HttpRequest):
     """
-    Buildbot integration entry point.
-    """
-    return BuildbotTryNotifier(CONFIGURATION)
-
-
-def parse_request(request, event_name):
-    """
-    Return the event name nad JSON from request.
+    Return the event name nad JSON from req.
     """
 
     SUPPORTED_CONTENT_TYPES = [
@@ -132,14 +118,14 @@ def parse_request(request, event_name):
         'application/json',
         ]
 
-    content_type = request.getHeader('Content-Type')
+    content_type = req.headers['Content-Type']
     if not content_type or content_type not in SUPPORTED_CONTENT_TYPES:
-        raise ServerException('Unsuported content type.')
+        raise ServerException('Unsupported content type.')
 
     if content_type == 'application/json':
-        json_serialization = request.content.getvalue()
+        json_serialization = req.get_body()
     elif content_type == 'application/x-www-form-urlencoded':
-        json_serialization = request.args['payload'][0]
+        json_serialization = req.params['payload'][0]
     else:
         raise AssertionError('How did we get here?')
 

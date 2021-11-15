@@ -14,3 +14,22 @@ It is not / and should not be published on PyPi.
 
 Also tests are designed to run from Chevah VPN with access to staging Trac
 instance.
+
+
+serverless
+==========
+
+To run offline for testing purposes:
+
+```sh
+npm install  # Required after changing `serverless.yml`.
+sls offline
+```
+
+To deploy on Azure Functions:
+
+```sh
+sls deploy
+```
+
+Refer to [Serverless docs](https://serverless.com/framework/docs/providers/azure/guide/intro/) for more information.
