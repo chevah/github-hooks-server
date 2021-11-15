@@ -13,4 +13,7 @@ virtualenv/
 *.egg-info/
 build/
 twistd.log
+
+# NodeJS
 node_modules/
+package-lock.json
