@@ -30,7 +30,7 @@ To create a working virtual environment::
 
     # Install the Serverless plugin `serverless-azure-functions`.
     # https://www.serverless.com/framework/docs/guides/plugins#installing-plugins
-    serverless plugin install -n serverless-azure-functions
+    npm install serverless-azure-functions
 
 
 Running offline
