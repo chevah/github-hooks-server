@@ -51,7 +51,7 @@ def bin2ip(b):
 # input validation routine for the CIDR block specified
 def validateCIDRBlock(b):
     # appropriate format for CIDR block ($prefix/$subnet)
-    p = re.compile("^([0-9]{1,3}\.){0,3}[0-9]{1,3}(/[0-9]{1,2}){1}$")
+    p = re.compile(r"^([0-9]{1,3}\.){0,3}[0-9]{1,3}(/[0-9]{1,2}){1}$")
     if not p.match(b):
         print("Error: Invalid CIDR format!")
         return False

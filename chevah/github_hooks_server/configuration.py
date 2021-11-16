@@ -27,16 +27,9 @@ CONFIGURATION = {
     # call `expand_allowed_ips()` if `allow_cidr` is changed at runtime.
     '_allowed_ips': {},
 
-    # URL to Trac XML-RPC API.
-    'trac-url': 'mock',
-
     # Details for the GitHub server from which hooks are received.
     'github-server': 'github.com',
     'github-hook-secret': None,
-
-    # Address and credentails for the Buildmaster perspective broker.
-    'buildbot-master': 'localhost:1080',
-    'buildbot-credentials': 'user:password',
 
     # GitHub API key used by react on GitHub.
     'github-token': 'set-a-token'

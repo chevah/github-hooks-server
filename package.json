@@ -1,14 +1,14 @@
 {
   "name": "github-hooks-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "Custom handling of GitHub Hooks for Chevah Project.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "serverless-azure-functions": "^2.0.0"
+  "license": "MIT",
+  "dependencies": {
+    "serverless-azure-functions": "^2.1.3"
   }
 }

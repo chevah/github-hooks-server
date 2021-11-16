@@ -55,6 +55,7 @@ distribution = setup(
             'nose',
             'pyflakes',
             'pep8',
+            'nodeenv',
             ],
     },
     test_suite='chevah.github_hooks_server.tests',

@@ -14,6 +14,10 @@ virtualenv/
 build/
 twistd.log
 
+# Python
+poetry.lock
+
 # NodeJS
 node_modules/
 package-lock.json
+local.settings.json
