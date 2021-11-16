@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.10.0'
+VERSION = '1.0.0'
 
 
 class PublishCommand(Command):
@@ -44,10 +44,10 @@ distribution = setup(
         'chevah.github_hooks_server': ['author-aliases.txt'],
         },
     install_requires=[
-        'toml',
-        'github3.py',
-        'azure-functions',
-        'azure-functions-worker',
+        'github3.py==3.0.0',
+        'azure-functions==1.7.2',
+        'azure-functions-worker==1.1.9',
+        'twisted==21.7.0',
         ],
     extras_require={
         'dev': [
@@ -55,10 +55,9 @@ distribution = setup(
             'nose',
             'pyflakes',
             'pep8',
-            'nodeenv',
+            'nodeenv==1.6.0',
             ],
     },
-    test_suite='chevah.github_hooks_server.tests',
     cmdclass={
         'publish': PublishCommand,
         },

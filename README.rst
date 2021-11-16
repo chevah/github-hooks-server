@@ -16,43 +16,39 @@ Also tests are designed to run from Chevah VPN with access to staging Trac
 instance.
 
 
-Development
-============
+Virtual environment
+===================
 
-To create a working environment:
+To create a working virtual environment::
 
-```sh
-virtualenv venv
-. venv/bin/activate
-poetry install
-nodeenv venv/node
-. venv/node/bin/activate
-npm install -g
+    virtualenv venv
+    . venv/bin/activate
+    poetry install
+    nodeenv venv/node -n 17.1.0
+    . venv/node/bin/activate
+    npm install -g
 
-# Install the Serverless plugin `serverless-azure-functions`.
-# https://www.serverless.com/framework/docs/guides/plugins#installing-plugins
-serverless plugin install -n serverless-azure-functions
-```
+    # Install the Serverless plugin `serverless-azure-functions`.
+    # https://www.serverless.com/framework/docs/guides/plugins#installing-plugins
+    serverless plugin install -n serverless-azure-functions
 
 
 Running offline
 ===============
 
-To run offline for testing purposes:
+To run offline for testing purposes, once you have a virtual environment::
 
-```sh
-. venv/bin/activate
-. venv/node/bin/activate
-serverless offline
-```
+    . venv/bin/activate
+    . venv/node/bin/activate
+    serverless offline
+
 
 Deployment
 ==========
 
-To deploy to Azure Functions:
+To deploy to Azure Functions::
 
-```sh
-sls deploy
-```
+    serverless deploy
+
 
 Refer to [Serverless Azure docs](https://serverless.com/framework/docs/providers/azure/guide/intro/) for more information.

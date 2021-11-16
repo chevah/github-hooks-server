@@ -10,6 +10,7 @@ chevah/github_hooks_server/tests/private.py
 build/
 dist/
 virtualenv/
+venv/
 *.egg-info/
 build/
 twistd.log
