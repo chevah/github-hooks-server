@@ -27,6 +27,7 @@ To create a working virtual environment::
     nodeenv venv/node -n 17.1.0
     . venv/node/bin/activate
     npm install -g
+    npm install -g serverless
 
     # Install the Serverless plugin `serverless-azure-functions`.
     # https://www.serverless.com/framework/docs/guides/plugins#installing-plugins
@@ -42,6 +43,15 @@ To run offline for testing purposes, once you have a virtual environment::
     . venv/node/bin/activate
     serverless offline
 
+
+To expose the offline server running on port 7071 to the Web,
+you can use PageKite::
+
+
+    pagekite 7071 yourname.pagekite.me
+
+
+This lets you test the GitHub hooks while easily iterating.
 
 Deployment
 ==========

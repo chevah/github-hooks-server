@@ -36,7 +36,8 @@ functions:
     events:
       - http: true
         methods:
-          - GET
+          - GET    # For easy testing.
+          - POST
         authLevel: anonymous
   issue_comment:
     handler: chevah/github_hooks_server/server.issue_comment

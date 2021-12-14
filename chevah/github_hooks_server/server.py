@@ -49,7 +49,10 @@ def ping(req: func.HttpRequest):
     """
     Simple resource to check that server is up.
     """
-    return func.HttpResponse('pong')
+    name = req.params.get('name')
+    if not name:
+        return func.HttpResponse('Pong!')
+    return func.HttpResponse(f'Greetings, {name}!')
 
 
 def pull_request_review(req: func.HttpRequest):
