@@ -1,7 +1,7 @@
 from setuptools import Command, find_packages, setup
 import os
 
-VERSION = '0.10.0'
+VERSION = '1.0.0'
 
 
 class PublishCommand(Command):
@@ -41,31 +41,23 @@ distribution = setup(
     namespace_packages=['chevah'],
     packages=find_packages('.'),
     package_data={
-        'chevah.github_hooks_server': ['static/*', 'author-aliases.txt'],
+        'chevah.github_hooks_server': ['author-aliases.txt'],
         },
-    scripts=['scripts/start-chevah-github-hooks.py'],
     install_requires=[
-        'klein==17.2',
-        'toml',
-        # We keep an older version of python is use.
-        'Twisted==15.5.0.chevah1',
-        'github3-py==1.0.0.gitc82e90e',
-        # We don't depended directly on them but github3.py
-        # dependencies are bad.
-        'urllib3',
-        'chardet',
-        'certifi',
-        'idna',
+        'github3.py==3.0.0',
+        'azure-functions==1.7.2',
+        'azure-functions-worker==1.1.9',
+        'twisted==21.7.0',
         ],
-    extras_require = {
+    extras_require={
         'dev': [
             'mock',
             'nose',
             'pyflakes',
             'pep8',
+            'nodeenv==1.6.0',
             ],
     },
-    test_suite = 'chevah.github_hooks_server.tests',
     cmdclass={
         'publish': PublishCommand,
         },

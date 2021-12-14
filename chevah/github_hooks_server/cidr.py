@@ -51,9 +51,9 @@ def bin2ip(b):
 # input validation routine for the CIDR block specified
 def validateCIDRBlock(b):
     # appropriate format for CIDR block ($prefix/$subnet)
-    p = re.compile("^([0-9]{1,3}\.){0,3}[0-9]{1,3}(/[0-9]{1,2}){1}$")
+    p = re.compile(r"^([0-9]{1,3}\.){0,3}[0-9]{1,3}(/[0-9]{1,2}){1}$")
     if not p.match(b):
-        print "Error: Invalid CIDR format!"
+        print("Error: Invalid CIDR format!")
         return False
     # extract prefix and subnet size
     prefix, subnet = b.split("/")
@@ -61,11 +61,11 @@ def validateCIDRBlock(b):
     quads = prefix.split(".")
     for q in quads:
         if (int(q) < 0) or (int(q) > 255):
-            print "Error: quad " + str(q) + " wrong size."
+            print("Error: quad " + str(q) + " wrong size.")
             return False
     # subnet is an appropriate value (1-32)
     if (int(subnet) < 1) or (int(subnet) > 32):
-        print "Error: subnet " + str(subnet) + " wrong size."
+        print("Error: subnet " + str(subnet) + " wrong size.")
         return False
     # passed all checks -> return True
     return True

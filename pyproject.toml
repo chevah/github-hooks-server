@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "chevah-github-hooks-server"
+version = "1.0.0"
+description = "Custom handling of GitHub Hooks for Chevah Project."
+authors = ["Adi Roiban <adi.roiban@chevah.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+"github3.py" = "^3.0.0"
+azure-functions = "^1.7.2"
+azure-functions-worker = "^1.1.9"
+twisted = "^21.7.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.5"
+nodeenv = "^1.6.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

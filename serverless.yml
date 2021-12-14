@@ -1,0 +1,54 @@
+# See Serverless configuration docs:
+# https://github.com/serverless/serverless-azure-functions/blob/master/docs/CONFIG.md
+
+service: github-hooks-server
+
+frameworkVersion: '2'
+
+provider:
+  name: azure
+  region: West Europe
+  runtime: python3.8
+
+  environment:
+    VARIABLE_FOO: 'foo'
+
+plugins:
+  - serverless-azure-functions
+package:
+  patterns:
+    - '!env/**'
+    - '!.env/**'
+    - '!local.settings.json'
+    - '!.vscode/**'
+    - '!__pycache__/**'
+    - '!node_modules/**'
+    - '!.python_packages/**'
+    - '!.funcignore'
+    - '!package.json'
+    - '!package-lock.json'
+    - '!.gitignore'
+    - '!.git/**'
+
+functions:
+  ping:
+    handler: chevah/github_hooks_server/server.ping
+    events:
+      - http: true
+        methods:
+          - GET
+        authLevel: anonymous
+  issue_comment:
+    handler: chevah/github_hooks_server/server.issue_comment
+    events:
+      - http: true
+        methods:
+          - POST
+        authLevel: anonymous
+  pull_request_review:
+    handler: chevah/github_hooks_server/server.pull_request_review
+    events:
+      - http: true
+        methods:
+          - POST
+        authLevel: anonymous

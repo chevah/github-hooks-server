@@ -8,8 +8,6 @@ from github3 import login
 
 
 from chevah.github_hooks_server import log
-from chevah.github_hooks_server.utils.trac import Trac, TracException
-
 
 class Handler(object):
     """
@@ -24,21 +22,16 @@ class Handler(object):
         'hcs0': 'hcs',
         }
 
-    RE_TRAC_TICKET_ID = '\[#(\d+)\] .*'
-    RE_REVIEWERS = '.*reviewers{0,1}:{0,1} @.*'
-    RE_NEEDS_REVIEW = '.*needs{0,1}[\-_]review.*'
-    RE_NEEDS_CHANGES = '.*needs{0,1}[\-_]changes{0,1}.*'
-    RE_APPROVED = '.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
+    RE_TRAC_TICKET_ID = r'\[#(\d+)\] .*'
+    RE_REVIEWERS = r'.*reviewers{0,1}:{0,1} @.*'
+    RE_NEEDS_REVIEW = r'.*needs{0,1}[\-_]review.*'
+    RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
+    RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
 
     # Helper for tests.
     _current_ticket = None
 
     def __init__(self, trac_url, github_token):
-        if trac_url == 'mock':
-            self.trac = None
-        else:
-            self.trac = Trac(login_url=trac_url)
-
         self._github = login(token=github_token)
         if not self._github:
             raise RuntimeError('Failed to init GitHut.')
@@ -52,39 +45,7 @@ class Handler(object):
             log.msg('[%s] No handler for "%s"' % (event.hook, event.name))
             return
 
-        try:
-            handler(event)
-        except TracException as error:
-            log.msg(str(error))
-
-    def push(self, event):
-        """
-        On push close tickets for commits from master.
-        """
-        if event.content['ref'] != 'refs/heads/master':
-            log.msg('[%s] Push not on master' % (event.hook))
-            return
-
-        for commit in event.content['commits']:
-            self.closeTicket(commit)
-
-    def closeTicket(self, commit):
-        """
-        Check commit message on master and close Trac ticket if required.
-        """
-        ticket_id = self._getTicketFromTitle(commit['message'])
-        if not ticket_id:
-            return
-
-        ticket = self.trac.getTicket(ticket_id)
-        ticket.close(
-            comment=(
-                'Branch landed on master. \n'
-                'Now go and update your master branch.'
-                ),
-            resolution='fixed',
-            )
-        self._current_ticket = ticket
+        handler(event)
 
     def pull_request_review(self, event):
         """
@@ -148,19 +109,6 @@ class Handler(object):
         else:
             log.msg('Failed to get PR %s for %s' % (issue_id, repo))
 
-        # Do the Trac stuff.
-        if not ticket_id:
-            # No associated Trac ticket.
-            return
-
-        ticket = self.trac.getTicket(ticket_id)
-        comment = u'%s requested the review of this ticket.\n\n%s' % (
-            user, body)
-        cc = ', '.join(reviewers)
-        ticket.requestReview(
-            comment=comment, cc=cc, pull_url=pull_url)
-        self._current_ticket = ticket
-
     def _setNeedsChanges(
             self, repo, ticket_id, issue_id, author_name, reviewer_name, body):
         """
@@ -175,17 +123,6 @@ class Handler(object):
             issue.edit(assignees=[author_name])
         else:
             log.msg('Failed to get PR %s for %s' % (issue_id, repo))
-
-        # Do the Trac stuff.
-        if not ticket_id:
-            # No associated Trac ticket.
-            return
-
-        ticket = self.trac.getTicket(ticket_id)
-        comment = u'%s needs-changes to this ticket.\n\n%s' % (
-            reviewer_name, body)
-        ticket.requestChanges(comment=comment)
-        self._current_ticket = ticket
 
     def _setApproveChanges(
             self, repo, ticket_id, issue_id, author_name, reviewer_name, body,
@@ -215,29 +152,6 @@ class Handler(object):
 
         else:
             log.msg('Failed to get PR %s for %s' % (issue_id, repo))
-
-        # Do the Trac stuff.
-        if not ticket_id:
-            # No associated Trac ticket.
-            return
-
-        ticket = self.trac.getTicket(ticket_id)
-        remaining_reviewers = self._getRemainingReviewers(
-            ticket.attributes['cc'], reviewer_name)
-        if not remaining_reviewers:
-            comment = (
-                u'%s changes-approved.\n'
-                u'No more reviewers.\n'
-                u'Ready to merge.\n\n%s' % (
-                    reviewer_name, body))
-            cc = ', '.join(reviewers)
-            ticket.requestMerge(comment=comment, cc=cc)
-        else:
-            comment = u'%s changes-approved.\n\n%s' % (reviewer_name, body)
-            ticket.update(
-                attributes={'cc': ', '.join(remaining_reviewers)},
-                comment=comment)
-        self._current_ticket = ticket
 
     def issue_comment(self, event):
         """

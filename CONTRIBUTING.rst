@@ -31,7 +31,7 @@ You will need a trac and a buildbot set up.
 Start with a config file based on the sample config and then edit it to
 match your dev env:
 
-    cp config.toml build/config.toml
+    cp config.ini build/config.ini
 
 To launch the server use:
 

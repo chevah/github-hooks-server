@@ -10,6 +10,15 @@ chevah/github_hooks_server/tests/private.py
 build/
 dist/
 virtualenv/
+venv/
 *.egg-info/
 build/
 twistd.log
+
+# Python
+poetry.lock
+
+# NodeJS
+node_modules/
+package-lock.json
+local.settings.json
