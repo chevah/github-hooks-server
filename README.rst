@@ -62,3 +62,9 @@ To deploy to Azure Functions::
 
 
 Refer to [Serverless Azure docs](https://serverless.com/framework/docs/providers/azure/guide/intro/) for more information.
+
+To inspect a package before deploying
+(such as for checking whether large useless files are included),
+build a package and inspect it before deploying::
+
+    serverless package

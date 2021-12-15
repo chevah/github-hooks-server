@@ -19,6 +19,7 @@ package:
   patterns:
     - '!env/**'
     - '!.env/**'
+    - '!venv/**'
     - '!local.settings.json'
     - '!.vscode/**'
     - '!__pycache__/**'
@@ -29,6 +30,8 @@ package:
     - '!package-lock.json'
     - '!.gitignore'
     - '!.git/**'
+    - '!chevah/github_hooks_server/tests/**'
+    - '!*.pyc'
 
 functions:
   ping:
