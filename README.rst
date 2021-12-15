@@ -68,3 +68,34 @@ To inspect a package before deploying
 build a package and inspect it before deploying::
 
     serverless package
+
+
+Troubleshooting
+===============
+
+If you get an `Error: EISDIR: illegal operation on a directory, read` during
+deployment, it worked to run `npm install` and try deployment again.
+
+If you keep seeing `Function App not ready. Retry XX of 30...`,
+check out the "Diagnose and solve problems" feature of
+[the Azure Function App tool](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp).
+For example, the name can be longer than 32 characters,
+leading to truncation and collisions.
+
+If that doesn't work, try the following:
+
+To do that, you need to install [`az`](https://github.com/Azure/azure-cli)
+and [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools).
+
+Then::
+
+    poetry export -f requirements.txt --output requirements.txt
+    # Poetry won't pin setuptools, but Azure wants it to prevent tampering.
+    echo 'setuptools==59.6.0 --hash=sha256:4ce92f1e1f8f01233ee9952c04f6b81d1e02939d6e1b488428154974a4d0783e' >> requirements.txt
+    serverless package
+    cd .serverless/
+    unzip githubhooks.zip
+    az login
+    func azure functionapp publish sls-weur-dev-githubhooks --python
+
+[Courtesy of this comment](https://github.com/serverless/serverless-azure-functions/issues/505#issuecomment-713218520).

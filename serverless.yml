@@ -1,7 +1,7 @@
 # See Serverless configuration docs:
 # https://github.com/serverless/serverless-azure-functions/blob/master/docs/CONFIG.md
 
-service: github-hooks-server
+service: githubhooks
 
 frameworkVersion: '2'
 
