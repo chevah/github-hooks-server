@@ -36,18 +36,10 @@ functions:
     events:
       - http: true
         methods:
-          - GET    # For easy testing.
-          - POST
+          - GET
         authLevel: anonymous
-  issue_comment:
-    handler: chevah/github_hooks_server/server.issue_comment
-    events:
-      - http: true
-        methods:
-          - POST
-        authLevel: anonymous
-  pull_request_review:
-    handler: chevah/github_hooks_server/server.pull_request_review
+  hook:
+    handler: chevah/github_hooks_server/server.hook
     events:
       - http: true
         methods:

@@ -9,32 +9,28 @@ try:
 except ImportError:
     import simplejson as json
 
-from chevah.github_hooks_server import log
-from chevah.github_hooks_server.handler import Handler
-from chevah.github_hooks_server.configuration import CONFIGURATION
+import logging
+from urllib.parse import parse_qs
 
 import azure.functions as func
+
+from chevah.github_hooks_server.configuration import CONFIGURATION
+from chevah.github_hooks_server.handler import Handler
 
 
 class Event(object):
     """
     Simple container for GitHub Event.
     """
-    def __init__(self, hook, name, content):
-        self.hook = hook
+    def __init__(self, name, content):
         self.name = name
         self.content = content
 
     def __str__(self):
-        return """
-        hook: %(hook)s
-        event: %(event)s
-        content:\n%(content)s
-            """ % {
-                    'hook': self.hook,
-                    'event': self.name,
-                    'content': self.content,
-                    }
+        return f"""
+        event: {self.name}
+        content:\n{self.content}
+            """
 
 
 class ServerException(Exception):
@@ -50,26 +46,13 @@ def ping(req: func.HttpRequest):
     Simple resource to check that server is up.
     """
     name = req.params.get('name')
+    logging.info('Serving a GET ping.')
     if not name:
         return func.HttpResponse('Pong!')
     return func.HttpResponse(f'Greetings, {name}!')
 
 
-def pull_request_review(req: func.HttpRequest):
-    """
-    Called when a PR review overview message is left.
-    """
-    hook(req, hook_name='pull_request_review')
-
-
-def issue_comment(req: func.HttpRequest):
-    """
-    Called when a PR review overview message is left.
-    """
-    hook(req, hook_name='issue_comment')
-
-
-def hook(req: func.HttpRequest, hook_name):
+def hook(req: func.HttpRequest):
     """
     Main hook entry point.
 
@@ -78,42 +61,38 @@ def hook(req: func.HttpRequest, hook_name):
     """
     event_name = req.headers['X-Github-Event']
     if not event_name:
-        log.msg('No event name for "%(name)s". %(details)s' % {
-                'name': hook_name, 'details': dict(req.headers).items()})
+        logging.error('No event_name for hook. %(details)s' % {
+                'details': dict(req.headers).items()})
         return "Error:004: What event is this?"
 
     content = None
     try:
         content = parse_request(req)
+        event = Event(name=event_name, content=content)
+        response = handle_event(event)
+        if response:
+            return response
+        return ''
     except ServerException as error:
-        log.msg('Failed to get json for hook "%(name)s". %(details)s' % {
-                'name': hook_name, 'details': error.message})
+        logging.error(
+            f'Failed to get json for hook "{event_name}". {error.message}'
+            )
         return "Error:002: Failed to get hook content."
     except:
         import traceback
-        log.msg(
-            'Failed to process "%(hook_name)s" "%(event_name)s":\n'
-            '%(content)s\n'
-            '%(details)s' % {
-                'hook_name': hook_name,
-                'event_name': event_name,
-                'content': content,
-                'details': traceback.format_exc(),
-                })
-        return "Error:003: Internal error"
-
-    event = Event(
-        hook=hook_name,
-        name=event_name,
-        content=content,
-        )
-
-    handle_event(event)
+        logging.error(
+            f'Failed to process "{event_name}":\n'
+            f'{content}\n'
+            f'{traceback.format_exc()}'
+            )
+        return func.HttpResponse(
+            body="Error:003: Internal error", status_code=500
+            )
 
 
 def parse_request(req: func.HttpRequest):
     """
-    Return the event name nad JSON from req.
+    Return the event name and JSON from req.
     """
 
     SUPPORTED_CONTENT_TYPES = [
@@ -126,14 +105,13 @@ def parse_request(req: func.HttpRequest):
         raise ServerException('Unsupported content type.')
 
     if content_type == 'application/json':
-        json_serialization = req.get_body()
+        data_dict = json.loads(req.get_body())
     elif content_type == 'application/x-www-form-urlencoded':
-        json_serialization = req.params['payload'][0]
+        data_dict = parse_qs(req.get_body())
     else:
         raise AssertionError('How did we get here?')
 
-    json_dict = json.loads(json_serialization)
-    return json_dict
+    return data_dict
 
 
 # Set up our hook handler.
@@ -148,6 +126,6 @@ def handle_event(event):
     """
     Called when we got an event.
     """
-    log.msg(str(event))
-    log.msg('Received new event "%s" for "%s"' % (event.name, event.hook))
-    handler.dispatch(event)
+    logging.info(str(event))
+    logging.info(f'Received new event "{event.name}".')
+    return handler.dispatch(event)
