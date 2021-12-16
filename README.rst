@@ -21,7 +21,7 @@ Virtual environment
 
 To create a working virtual environment::
 
-    virtualenv venv
+    virtualenv -p 3.8 venv  # Last Python version supported by serverless-azure-functions
     . venv/bin/activate
     poetry install
     nodeenv venv/node -n 17.1.0
@@ -32,6 +32,12 @@ To create a working virtual environment::
     # Install the Serverless plugin `serverless-azure-functions`.
     # https://www.serverless.com/framework/docs/guides/plugins#installing-plugins
     npm install serverless-azure-functions
+
+
+To activate the virtual environment::
+
+    . venv/bin/activate
+    . venv/node/bin/activate
 
 
 Running offline
@@ -51,7 +57,9 @@ you can use PageKite::
     pagekite 7071 yourname.pagekite.me
 
 
-This lets you test the GitHub hooks while easily iterating.
+This lets you test the
+`GitHub hooks <https://github.com/chevah/github-hooks-server/settings/hooks>`_
+while easily iterating.
 
 Deployment
 ==========
@@ -61,7 +69,10 @@ To deploy to Azure Functions::
     serverless deploy
 
 
-Refer to [Serverless Azure docs](https://serverless.com/framework/docs/providers/azure/guide/intro/) for more information.
+Refer to
+`Serverless Azure docs
+<https://serverless.com/framework/docs/providers/azure/guide/intro/>`_
+for more information.
 
 To inspect a package before deploying
 (such as for checking whether large useless files are included),
@@ -78,14 +89,15 @@ deployment, it worked to run `npm install` and try deployment again.
 
 If you keep seeing `Function App not ready. Retry XX of 30...`,
 check out the "Diagnose and solve problems" feature of
-[the Azure Function App tool](https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp).
+`the Azure Function App management tool
+<https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp>`_.
 For example, the name can be longer than 32 characters,
 leading to truncation and collisions.
 
-If that doesn't work, try the following:
-
-To do that, you need to install [`az`](https://github.com/Azure/azure-cli)
-and [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools).
+If that doesn't work, try to install
+`Azure CLI <https://github.com/Azure/azure-cli>`_ and
+`Azure Functions Core Tools
+<https://github.com/Azure/azure-functions-core-tools>`_.
 
 Then::
 
@@ -98,4 +110,5 @@ Then::
     az login
     func azure functionapp publish sls-weur-dev-githubhooks --python
 
-[Courtesy of this comment](https://github.com/serverless/serverless-azure-functions/issues/505#issuecomment-713218520).
+`Courtesy of this comment
+<https://github.com/serverless/serverless-azure-functions/issues/505#issuecomment-713218520>`_.

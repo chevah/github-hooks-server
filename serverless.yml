@@ -31,7 +31,7 @@ package:
     - '!.gitignore'
     - '!.git/**'
     - '!chevah/github_hooks_server/tests/**'
-    - '!*.pyc'
+    - '!**.pyc'
 
 functions:
   ping:
