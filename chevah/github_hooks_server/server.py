@@ -13,6 +13,7 @@ import logging
 from urllib.parse import parse_qs
 
 import azure.functions as func
+import github3
 
 from chevah.github_hooks_server.configuration import CONFIGURATION
 from chevah.github_hooks_server.handler import Handler
@@ -118,7 +119,7 @@ def parse_request(req: func.HttpRequest):
 credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
 handler = Handler(
     trac_url='https://%s/login/xmlrpc' % (credentials_and_address, ),
-    github_token=CONFIGURATION['github-token'],
+    github=github3.login(token=CONFIGURATION['github-token']),
     )
 
 

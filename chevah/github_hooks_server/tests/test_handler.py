@@ -8,15 +8,58 @@ The test from here are very fragile as they depend on read GitHub data.
 """
 from __future__ import unicode_literals
 
+import logging
 from unittest import TestCase
 
 from mock import Mock
-from twisted.python import log
 
 from chevah.github_hooks_server.handler import Handler
 from chevah.github_hooks_server.server import Event
 
-from chevah.github_hooks_server.tests.private import github_token
+
+class MockGitHub:
+    """
+    Simulate interaction with GitHub.
+    """
+
+
+class LogAsserter(logging.Handler):
+    """
+    A log handler that allows asserting events.
+    """
+    def __init__(self):
+        """
+        Initialize the list of logging events to assert.
+        Each assertion disappears as it is asserted against.
+        The final state must be empty.
+        """
+        super(LogAsserter, self).__init__()
+        self.logs = []
+
+    def emit(self, record):
+        """
+        Keep track of an event.
+        """
+        self.logs.append(record.getMessage())
+
+    def assertLog(self, expected):
+        """
+        Check that oldest entry in the log has the text `expected`.
+        """
+        actual = self.logs.pop(0)
+        if actual != expected:
+            raise AssertionError(
+                f'Bad log.\nExpecting:\n>{expected}<\nGot:\n>{actual}<')
+
+        if not isinstance(actual, str):
+            raise AssertionError(f'Log message should be string: {actual}')
+
+    def complainIfNotEmpty(self):
+        """
+        Throw an error if there still are events not asserted.
+        """
+        if self.logs:
+            raise AssertionError('Still log messages: %s' % (self.logs,))
 
 
 class TestHandler(TestCase):
@@ -26,35 +69,26 @@ class TestHandler(TestCase):
 
     def setUp(self):
         super(TestHandler, self).setUp()
-        self.handler = Handler(trac_url='mock', github_token=github_token)
-        self.handler.trac = Mock()
-        self.logs = []
-        log.addObserver(self.recordEvent)
+        self.mock_github = MockGitHub()
+        self.handler = Handler(
+            trac_url='mock',
+            github=self.mock_github
+            )
 
-    def recordEvent(self, event):
-        """
-        Keep track of all event.
-        """
-        self.logs.append(event)
+        self.log_asserter = LogAsserter()
+        self.logger = logging.getLogger()
+        self.logger.addHandler(self.log_asserter)
 
     def tearDown(self):
-        log.removeObserver(self.recordEvent)
-        for entry in self.logs:
-                raise AssertionError('Still log messages: %s' % (self.logs,))
+        self.logger.removeHandler(self.log_asserter)
+        self.log_asserter.complainIfNotEmpty()
         super(TestHandler, self).tearDown()
 
     def assertLog(self, expected):
         """
-        Check that oldest entry in the log has the text `expected`.
+        Forward the assertLog method to the LogAsserter.
         """
-        current = self.logs.pop(0)
-        actual = current['log_text']
-        if actual != expected:
-            raise AssertionError('Bad log.\nExpecting:\n>%r<\nGot:\n>%r<' % (
-                expected, actual))
-
-        if not isinstance(actual, str):
-            raise AssertionError('Log message should be bytes: %r' % (actual,))
+        return self.log_asserter.assertLog(expected)
 
     def test_push_not_master(self):
         """
@@ -794,8 +828,8 @@ class TestHandler(TestCase):
         self.assertIsNone(ticket_id)
 
         self.assertLog(
-            b'Pull request has no ticket id in title: '
-            b'Simle words 12 r\xc3\x89sume.')
+            'Pull request has no ticket id in title: '
+            'Simle words 12 r\xc3\x89sume.')
 
     def test_getReviewers_no(self):
         """
@@ -933,7 +967,7 @@ class TestHandler(TestCase):
         self.assertEqual(['ala', 'bala'], result)
 
         self.assertLog(
-            b'Current user "popa" not in the list of reviewers ala, bala')
+            'Current user "popa" not in the list of reviewers ala, bala')
 
     def test_getRemainingReviewers_found(self):
         """

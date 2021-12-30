@@ -4,8 +4,6 @@ Custom logic for handling GitHub hooks.
 import re
 import logging
 
-import github3
-
 
 class Handler(object):
     """
@@ -29,8 +27,8 @@ class Handler(object):
     # Helper for tests.
     _current_ticket = None
 
-    def __init__(self, trac_url, github_token):
-        self._github = github3.login(token=github_token)
+    def __init__(self, trac_url, github):
+        self._github = github
         if not self._github:
             raise RuntimeError('Failed to init GitHut.')
 
