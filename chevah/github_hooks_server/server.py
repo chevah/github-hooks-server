@@ -2,13 +2,7 @@
 This is the part where requests are dispatched.
 """
 
-try:
-    import json
-    # Shut up the linter.
-    json
-except ImportError:
-    import simplejson as json
-
+import json
 import logging
 from urllib.parse import parse_qs
 

@@ -1,8 +1,10 @@
 """
 Custom logic for handling GitHub hooks.
 """
-import re
 import logging
+import re
+
+import github3
 
 
 class Handler(object):
@@ -23,9 +25,6 @@ class Handler(object):
     RE_NEEDS_REVIEW = r'.*needs{0,1}[\-_]review.*'
     RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
     RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
-
-    # Helper for tests.
-    _current_ticket = None
 
     def __init__(self, trac_url, github):
         self._github = github
@@ -110,6 +109,10 @@ class Handler(object):
         """
         Set the ticket to needs review.
         """
+        logging.debug(
+            f'_setNeedsReview '
+            f'repo={repo}, issue_id={issue_id}, reviewers={reviewers}')
+
         # Do the GitHub stuff
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, issue_id)
