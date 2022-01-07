@@ -14,22 +14,16 @@ class Handler(object):
     Should implement a method with the same name as github event.
     """
 
-    USERS_GITHUB_TO_TRAC = {
-        'adiroiban': 'adi',
-        'lgheorghiu': 'laura',
-        'hcs0': 'hcs',
-        }
-
     RE_TRAC_TICKET_ID = r'\[#(\d+)\] .*'
     RE_REVIEWERS = r'.*reviewers{0,1}:{0,1} @.*'
     RE_NEEDS_REVIEW = r'.*needs{0,1}[\-_]review.*'
     RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
     RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
 
-    def __init__(self, trac_url, github):
+    def __init__(self, github):
         self._github = github
         if not self._github:
-            raise RuntimeError('Failed to init GitHut.')
+            raise RuntimeError('Failed to init GitHub.')
 
     def dispatch(self, event):
         """
@@ -38,7 +32,7 @@ class Handler(object):
         handler = getattr(self, event.name, None)
         if handler is None:
             message = f'No handler for "{event.name}"'
-            logging.error(message)
+            logging.warning(message)
             return message
 
         return handler(event)
@@ -52,6 +46,33 @@ class Handler(object):
         if not zen:
             return 'Pong! But GitHub Zen text is missing.'
         return f'Pong! {zen}'
+
+    def pull_request(self, event):
+        """
+        Called, among other cases, when a PR review is requested.
+
+        Triggers the same actions as the needs-review command to issue_comment.
+
+        The `review_requested` action is under the `pull_request` event:
+        https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+        """
+        action = event.content.get('action')
+        if action != 'review_requested':
+            logging.warning(f"No handler for pull_request action '{action}'.")
+            return
+
+        title = event.content['pull_request']['title']
+        ticket_id = self._getTicketFromTitle(title)
+
+        repo = event.content['repository']['full_name']
+        pull_id = event.content['pull_request']['number']
+        reviewers = self._getReviewers(event.content['pull_request']['body'])
+
+        logging.info(
+            f'[{event.name}][{ticket_id}] Review requested from {reviewers}.'
+            )
+
+        self._setNeedsReview(repo=repo, pull_id=pull_id, reviewers=reviewers)
 
     def pull_request_review(self, event):
         """
@@ -69,8 +90,7 @@ class Handler(object):
         issue_id = event.content['pull_request']['number']
         author_name = event.content['pull_request']['user']['login']
         body = event.content['review']['body']
-        reviewer_name = self._getTracUser(
-            event.content['review']['user']['login'])
+        reviewer_name = event.content['review']['user']['login']
 
         reviewers = self._getReviewers(event.content['pull_request']['body'])
 
@@ -104,25 +124,23 @@ class Handler(object):
                 Label did not exist. Move on.
                 """
 
-    def _setNeedsReview(
-            self, repo, ticket_id, issue_id, user, body, reviewers, pull_url):
+    def _setNeedsReview(self, repo, pull_id, reviewers):
         """
         Set the ticket to needs review.
         """
         logging.debug(
             f'_setNeedsReview '
-            f'repo={repo}, issue_id={issue_id}, reviewers={reviewers}')
+            f'repo={repo}, pull_id={pull_id}, reviewers={reviewers}')
 
         # Do the GitHub stuff
         username, repository = repo.split('/', 1)
-        issue = self._github.issue(username, repository, issue_id)
+        issue = self._github.issue(username, repository, pull_id)
         if issue:
             issue.add_labels('needs-review')
             self._removeLabels(issue, ['needs-changes', 'needs-merge'])
-            gh_users = [self._getGitHubUser(r) for r in reviewers]
-            issue.edit(assignees=gh_users)
+            issue.edit(assignees=reviewers)
         else:
-            logging.error('Failed to get PR %s for %s' % (issue_id, repo))
+            logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
     def _setNeedsChanges(
             self, repo, ticket_id, issue_id, author_name, reviewer_name, body):
@@ -151,11 +169,8 @@ class Handler(object):
         issue = self._github.issue(username, repository, issue_id)
 
         if issue:
-            current_reviewers = set([u.login for u in issue.assignees])
-            remaining_reviewers = (
-                current_reviewers -
-                set([self._getGitHubUser(reviewer_name)])
-                )
+            current_reviewers = {u.login for u in issue.assignees}
+            remaining_reviewers = current_reviewers - {reviewer_name}
 
             if not remaining_reviewers:
                 # All reviewers done
@@ -185,14 +200,13 @@ class Handler(object):
             return
 
         repo = event.content['repository']['full_name']
-        issue_id = event.content['issue']['number']
+        pull_id = event.content['issue']['number']
 
         message = event.content['issue']['title']
         ticket_id = self._getTicketFromTitle(message)
 
         body = event.content['comment']['body']
-        reviewer_name = self._getTracUser(
-            event.content['comment']['user']['login'])
+        reviewer_name = event.content['comment']['user']['login']
 
         author_name = event.content['issue']['user']['login']
 
@@ -203,17 +217,18 @@ class Handler(object):
 
         if self._needsReview(body):
             self._setNeedsReview(
-                repo, ticket_id, issue_id, reviewer_name, body, reviewers,
-                pull_url,
+                repo=repo,
+                pull_id=pull_id,
+                reviewers=reviewers,
                 )
 
         elif self._needsChanges(body):
             self._setNeedsChanges(
-                repo, ticket_id, issue_id, author_name, reviewer_name, body)
+                repo, ticket_id, pull_id, author_name, reviewer_name, body)
 
         elif self._changesApproved(body):
             self._setApproveChanges(
-                repo, ticket_id, issue_id, author_name, reviewer_name, body,
+                repo, ticket_id, pull_id, author_name, reviewer_name, body,
                 reviewers,
                 )
 
@@ -232,19 +247,6 @@ class Handler(object):
 
     def _getReviewers(self, message):
         """
-        Return the list of reviewers as Trac names.
-        """
-        results = self._getGitHubReviewers(message)
-
-        # Convert to Trac accounts... if we can.
-        reviewers = []
-        for git_login in results:
-            trac_login = self._getTracUser(git_login)
-            reviewers.append(trac_login)
-        return reviewers
-
-    def _getGitHubReviewers(self, message):
-        """
         Return the list of reviewers as GitHub names.
         """
         results = []
@@ -256,24 +258,6 @@ class Handler(object):
                 if word.startswith('@'):
                     results.append(word[1:].strip())
         return results
-
-    def _getTracUser(self, git_login):
-        """
-        Return the Trac account associated for Git login.
-        """
-        try:
-            return self.USERS_GITHUB_TO_TRAC[git_login]
-        except KeyError:
-            return git_login
-
-    def _getGitHubUser(self, trac_login):
-        """
-        Return the GitHub ID based on trac ID.
-        """
-        for key, value in self.USERS_GITHUB_TO_TRAC.items():
-            if value.lower() == trac_login.lower():
-                return key
-        return trac_login
 
     def _needsChanges(self, content):
         """
