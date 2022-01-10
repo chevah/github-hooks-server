@@ -21,16 +21,23 @@ Virtual environment
 
 To create a working virtual environment::
 
-    virtualenv venv
+    virtualenv -p 3.8 venv  # Last Python version supported by serverless-azure-functions
     . venv/bin/activate
     poetry install
     nodeenv venv/node -n 17.1.0
     . venv/node/bin/activate
     npm install -g
+    npm install -g serverless
 
     # Install the Serverless plugin `serverless-azure-functions`.
     # https://www.serverless.com/framework/docs/guides/plugins#installing-plugins
     npm install serverless-azure-functions
+
+
+To activate the virtual environment::
+
+    . venv/bin/activate
+    . venv/node/bin/activate
 
 
 Running offline
@@ -43,6 +50,17 @@ To run offline for testing purposes, once you have a virtual environment::
     serverless offline
 
 
+To expose the offline server running on port 7071 to the Web,
+you can use PageKite::
+
+
+    pagekite 7071 yourname.pagekite.me
+
+
+This lets you test the
+`GitHub hooks <https://github.com/chevah/github-hooks-server/settings/hooks>`_
+while easily iterating.
+
 Deployment
 ==========
 
@@ -51,4 +69,46 @@ To deploy to Azure Functions::
     serverless deploy
 
 
-Refer to [Serverless Azure docs](https://serverless.com/framework/docs/providers/azure/guide/intro/) for more information.
+Refer to
+`Serverless Azure docs
+<https://serverless.com/framework/docs/providers/azure/guide/intro/>`_
+for more information.
+
+To inspect a package before deploying
+(such as for checking whether large useless files are included),
+build a package and inspect it before deploying::
+
+    serverless package
+
+
+Troubleshooting
+===============
+
+If you get an `Error: EISDIR: illegal operation on a directory, read` during
+deployment, it worked to run `npm install` and try deployment again.
+
+If you keep seeing `Function App not ready. Retry XX of 30...`,
+check out the "Diagnose and solve problems" feature of
+`the Azure Function App management tool
+<https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp>`_.
+For example, the name can be longer than 32 characters,
+leading to truncation and collisions.
+
+If that doesn't work, try to install
+`Azure CLI <https://github.com/Azure/azure-cli>`_ and
+`Azure Functions Core Tools
+<https://github.com/Azure/azure-functions-core-tools>`_.
+
+Then::
+
+    poetry export -f requirements.txt --output requirements.txt
+    # Poetry won't pin setuptools, but Azure wants it to prevent tampering.
+    echo 'setuptools==59.6.0 --hash=sha256:4ce92f1e1f8f01233ee9952c04f6b81d1e02939d6e1b488428154974a4d0783e' >> requirements.txt
+    serverless package
+    cd .serverless/
+    unzip githubhooks.zip
+    az login
+    func azure functionapp publish sls-weur-dev-githubhooks --python
+
+`Courtesy of this comment
+<https://github.com/serverless/serverless-azure-functions/issues/505#issuecomment-713218520>`_.

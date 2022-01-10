@@ -1,13 +1,11 @@
 """
 Custom logic for handling GitHub hooks.
 """
-from __future__ import unicode_literals
 import re
+import logging
 
-from github3 import login
+import github3
 
-
-from chevah.github_hooks_server import log
 
 class Handler(object):
     """
@@ -32,7 +30,7 @@ class Handler(object):
     _current_ticket = None
 
     def __init__(self, trac_url, github_token):
-        self._github = login(token=github_token)
+        self._github = github3.login(token=github_token)
         if not self._github:
             raise RuntimeError('Failed to init GitHut.')
 
@@ -42,17 +40,28 @@ class Handler(object):
         """
         handler = getattr(self, event.name, None)
         if handler is None:
-            log.msg('[%s] No handler for "%s"' % (event.hook, event.name))
-            return
+            message = f'No handler for "{event.name}"'
+            logging.error(message)
+            return message
 
-        handler(event)
+        return handler(event)
+
+    def ping(self, event):
+        """
+        Called when GitHub sends us a ping.
+        """
+        logging.info('Serving a POST ping.')
+        zen = event.content.get('zen')
+        if not zen:
+            return 'Pong! But GitHub Zen text is missing.'
+        return f'Pong! {zen}'
 
     def pull_request_review(self, event):
         """
         Called when a PR review overview message is left.
         """
         if event.content.get('action', 'submitted') != 'submitted':
-            log.msg('[%s] Not review submission.' % (event.hook))
+            logging.info('[%s] Not review submission.' % (event.name))
             return
 
         title = event.content['pull_request']['title']
@@ -68,8 +77,8 @@ class Handler(object):
 
         reviewers = self._getReviewers(event.content['pull_request']['body'])
 
-        log.msg(u'[%s][%s] New review from %s as %s\n%s' % (
-            event.hook, ticket_id, reviewer_name, state, body))
+        logging.info(u'[%s][%s] New review from %s as %s\n%s' % (
+            event.name, ticket_id, reviewer_name, state, body))
 
         if state == 'approved':
             # An approved review comment.
@@ -88,10 +97,15 @@ class Handler(object):
 
     def _removeLabels(self, issue, labels):
         """
-        Remove labels from the issue.
+        Remove labels from the issue, if they exist.
         """
         for label in labels:
-            issue.remove_label(label)
+            try:
+                issue.remove_label(label)
+            except github3.exceptions.NotFoundError:
+                """
+                Label did not exist. Move on.
+                """
 
     def _setNeedsReview(
             self, repo, ticket_id, issue_id, user, body, reviewers, pull_url):
@@ -107,7 +121,7 @@ class Handler(object):
             gh_users = [self._getGitHubUser(r) for r in reviewers]
             issue.edit(assignees=gh_users)
         else:
-            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
+            logging.error('Failed to get PR %s for %s' % (issue_id, repo))
 
     def _setNeedsChanges(
             self, repo, ticket_id, issue_id, author_name, reviewer_name, body):
@@ -122,7 +136,7 @@ class Handler(object):
             self._removeLabels(issue, ['needs-review', 'needs-merge'])
             issue.edit(assignees=[author_name])
         else:
-            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
+            logging.error('Failed to get PR %s for %s' % (issue_id, repo))
 
     def _setApproveChanges(
             self, repo, ticket_id, issue_id, author_name, reviewer_name, body,
@@ -151,7 +165,7 @@ class Handler(object):
                 issue.edit(assignees=list(remaining_reviewers))
 
         else:
-            log.msg('Failed to get PR %s for %s' % (issue_id, repo))
+            logging.error('Failed to get PR %s for %s' % (issue_id, repo))
 
     def issue_comment(self, event):
         """
@@ -159,12 +173,14 @@ class Handler(object):
         command and sync state with trac.
         """
         if event.content.get('action', 'created') != 'created':
-            log.msg('[%s] Not a created issue comment.' % (event.hook))
+            logging.error('[%s] Not a created issue comment.' % (event.name))
             return
 
         pull_url = event.content['issue']['pull_request']['html_url']
         if not pull_url:
-            log.msg('[%s] Not a comment on a pull request' % (event.hook))
+            logging.error(
+                '[%s] Not a comment on a pull request' % (event.name)
+                )
             return
 
         repo = event.content['repository']['full_name']
@@ -181,8 +197,8 @@ class Handler(object):
 
         reviewers = self._getReviewers(event.content['issue']['body'])
 
-        log.msg(u'[%s][%s] New comment from %s with reviewers %s\n%s' % (
-            event.hook, ticket_id, reviewer_name, reviewers, body))
+        logging.info(u'[%s][%s] New comment from %s with reviewers %s\n%s' % (
+            event.name, ticket_id, reviewer_name, reviewers, body))
 
         if self._needsReview(body):
             self._setNeedsReview(
@@ -208,7 +224,7 @@ class Handler(object):
         # https://github.com/chevah/seesaw/pull/12-some.new
         result = re.match(self.RE_TRAC_TICKET_ID, text)
         if not result:
-            log.msg(
+            logging.error(
                 'Pull request has no ticket id in title: %s' % (text,))
             return
         return int(result.group(1))
@@ -299,6 +315,7 @@ class Handler(object):
         try:
             reviewers.remove(user)
         except ValueError:
-            log.msg('Current user "%s" not in the list of reviewers %s' % (
-                user, cc_string))
+            logging.error(
+                'Current user "%s" not in the list of reviewers %s' % (
+                    user, cc_string))
         return reviewers

@@ -22,3 +22,6 @@ poetry.lock
 node_modules/
 package-lock.json
 local.settings.json
+
+# Serverless deployable package
+.serverless/

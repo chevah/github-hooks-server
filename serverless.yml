@@ -1,7 +1,7 @@
 # See Serverless configuration docs:
 # https://github.com/serverless/serverless-azure-functions/blob/master/docs/CONFIG.md
 
-service: github-hooks-server
+service: githubhooks
 
 frameworkVersion: '2'
 
@@ -19,6 +19,7 @@ package:
   patterns:
     - '!env/**'
     - '!.env/**'
+    - '!venv/**'
     - '!local.settings.json'
     - '!.vscode/**'
     - '!__pycache__/**'
@@ -29,6 +30,8 @@ package:
     - '!package-lock.json'
     - '!.gitignore'
     - '!.git/**'
+    - '!chevah/github_hooks_server/tests/**'
+    - '!**.pyc'
 
 functions:
   ping:
@@ -38,15 +41,8 @@ functions:
         methods:
           - GET
         authLevel: anonymous
-  issue_comment:
-    handler: chevah/github_hooks_server/server.issue_comment
-    events:
-      - http: true
-        methods:
-          - POST
-        authLevel: anonymous
-  pull_request_review:
-    handler: chevah/github_hooks_server/server.pull_request_review
+  hook:
+    handler: chevah/github_hooks_server/server.hook
     events:
       - http: true
         methods:
