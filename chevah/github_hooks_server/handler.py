@@ -49,16 +49,13 @@ class Handler(object):
 
     def pull_request(self, event):
         """
-        Called, among other cases, when a PR review is requested.
+        Called for actions on a PR, except the actions done by a reviewer.
 
-        Triggers the same actions as the needs-review command to issue_comment.
-
-        The `review_requested` action is under the `pull_request` event:
-        https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+        See: https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
         """
         action = event.content.get('action')
-        if action != 'review_requested':
-            logging.warning(f"No handler for pull_request action '{action}'.")
+        if action not in ['review_requested', 'ready_for_review']:
+            logging.debug(f"No handler for pull_request action '{action}'.")
             return
 
         title = event.content['pull_request']['title']
@@ -72,11 +69,17 @@ class Handler(object):
             f'[{event.name}][{ticket_id}] Review requested from {reviewers}.'
             )
 
-        self._setNeedsReview(repo=repo, pull_id=pull_id, reviewers=reviewers)
+        self._setNeedsReview(
+            repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
+            )
 
     def pull_request_review(self, event):
         """
-        Called when a PR review overview message is left.
+        Called when a "PR Review" action is made.
+
+        For example, when approving or rejecting a PR via a review.
+
+        See https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request_review
         """
         if event.content.get('action', 'submitted') != 'submitted':
             logging.info('[%s] Not review submission.' % (event.name))
@@ -124,13 +127,17 @@ class Handler(object):
                 Label did not exist. Move on.
                 """
 
-    def _setNeedsReview(self, repo, pull_id, reviewers):
+    def _setNeedsReview(self, repo, pull_id, reviewers, event):
         """
         Set the ticket to needs review.
         """
         logging.debug(
             f'_setNeedsReview '
-            f'repo={repo}, pull_id={pull_id}, reviewers={reviewers}')
+            f'event={event.name}, '
+            f'repo={repo}, '
+            f'pull_id={pull_id}, '
+            f'reviewers={reviewers}'
+            )
 
         # Do the GitHub stuff
         username, repository = repo.split('/', 1)
@@ -217,9 +224,7 @@ class Handler(object):
 
         if self._needsReview(body):
             self._setNeedsReview(
-                repo=repo,
-                pull_id=pull_id,
-                reviewers=reviewers,
+                repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
                 )
 
         elif self._needsChanges(body):

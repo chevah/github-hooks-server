@@ -329,11 +329,11 @@ class TestHandler(TestCase):
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-changes', 'needs-merge', 'low'])
         issue.edit(assignees=['chevah-robot'])
-        initial_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-changes', initial_lables)
-        self.assertIn('needs-merge', initial_lables)
-        self.assertIn('low', initial_lables)
-        self.assertNotIn('needs-review', initial_lables)
+        initial_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-changes', initial_labels)
+        self.assertIn('needs-merge', initial_labels)
+        self.assertIn('low', initial_labels)
+        self.assertNotIn('needs-review', initial_labels)
         self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
 
     def assertReviewRequested(self):
@@ -373,6 +373,8 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
+
+        self.prepareToNeedReview()
         event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
@@ -386,6 +388,7 @@ class TestHandler(TestCase):
             )
         self.assertLog(
             "_setNeedsReview "
+            "event=issue_comment, "
             "repo=chevah/github-hooks-server, "
             "pull_id=8, "
             "reviewers=['adiroiban', 'danuker']"
@@ -397,38 +400,44 @@ class TestHandler(TestCase):
         When a review is requested from someone,
         the "needs-review" action is also triggered.
 
-        The `review_requested` action is under the `pull_request` event:
+        There are two relevant actions under the `pull_request` event:
+        `review_requested` and `ready_for_review`.
         https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
         """
-        content = {
-            'action': 'review_requested',
-            'pull_request': {
-                'html_url': 'something',
-                'title': '[#12] Some message.',
-                'body': 'bla\r\nreviewers @adiroiban @danuker\r\nbla',
-                'number': 8,
-                'user': {'login': 'adiroiban'},
-                },
-            'repository': {
-                'full_name': 'chevah/github-hooks-server',
-                },
-            }
+        actions = ['review_requested', 'ready_for_review']
 
-        event = Event(name='pull_request', content=content)
+        for action in actions:
+            content = {
+                'action': action,
+                'pull_request': {
+                    'html_url': 'something',
+                    'title': '[#12] Some message.',
+                    'body': 'bla\r\nreviewers @adiroiban @danuker\r\nbla',
+                    'number': 8,
+                    'user': {'login': 'adiroiban'},
+                    },
+                'repository': {
+                    'full_name': 'chevah/github-hooks-server',
+                    },
+                }
 
-        self.handler.dispatch(event)
+            self.prepareToNeedReview()
+            event = Event(name='pull_request', content=content)
 
-        self.assertLog(
-            "[pull_request][12] "
-            "Review requested from ['adiroiban', 'danuker']."
-            )
-        self.assertLog(
-            "_setNeedsReview "
-            "repo=chevah/github-hooks-server, "
-            "pull_id=8, "
-            "reviewers=['adiroiban', 'danuker']"
-            )
-        self.assertReviewRequested()
+            self.handler.dispatch(event)
+
+            self.assertLog(
+                "[pull_request][12] "
+                "Review requested from ['adiroiban', 'danuker']."
+                )
+            self.assertLog(
+                "_setNeedsReview "
+                "event=pull_request, "
+                "repo=chevah/github-hooks-server, "
+                "pull_id=8, "
+                "reviewers=['adiroiban', 'danuker']"
+                )
+            self.assertReviewRequested()
 
 #
 # --------------------- needs-changes -----------------------------------------

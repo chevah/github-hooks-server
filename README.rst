@@ -23,6 +23,7 @@ To create a working virtual environment::
 
     virtualenv -p 3.8 venv  # Last Python version supported by serverless-azure-functions
     . venv/bin/activate
+    pip install poetry
     poetry install
     nodeenv venv/node -n 17.1.0
     . venv/node/bin/activate
