@@ -4,6 +4,7 @@ This is the part where requests are dispatched.
 
 import json
 import logging
+import sys
 from urllib.parse import parse_qs
 
 import azure.functions as func
@@ -11,6 +12,19 @@ import github3
 
 from chevah.github_hooks_server.configuration import CONFIGURATION
 from chevah.github_hooks_server.handler import Handler
+
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logging.critical(
+        "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+
+sys.excepthook = handle_exception
 
 
 class Event(object):
