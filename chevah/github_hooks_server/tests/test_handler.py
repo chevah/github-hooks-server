@@ -6,17 +6,117 @@ https://github.com/chevah/github-hooks-server/pull/8
 
 The test from here are very fragile as they depend on read GitHub data.
 """
-from __future__ import unicode_literals
-
+import logging
 from unittest import TestCase
 
-from mock import Mock
-from twisted.python import log
+import github3
 
 from chevah.github_hooks_server.handler import Handler
 from chevah.github_hooks_server.server import Event
-
 from chevah.github_hooks_server.tests.private import github_token
+
+
+class LogAsserter(logging.Handler):
+    """
+    A log handler that allows asserting events.
+    Each assertion consumes the first event.
+    At the end of the test, `self.logs` should be empty.
+    """
+    def __init__(self):
+        """
+        Initialize the list of logging events to assert.
+        """
+        super(LogAsserter, self).__init__()
+        self.logs = []
+
+    def emit(self, record):
+        """
+        Keep track of log events, except for logs from site-packages.
+        """
+        if '/site-packages/' not in record.pathname:
+            self.logs.append(record)
+
+    def assertLog(self, expected):
+        """
+        Check that oldest entry in the log has the text `expected`.
+        """
+        actual_entry = self.logs.pop(0)
+        actual = actual_entry.getMessage()
+
+        if actual != expected:
+            raise AssertionError(
+                f'Bad log.\nExpecting:\n>{expected}<\nGot:\n>{actual}<')
+
+        if not isinstance(actual, str):
+            raise AssertionError(f'Log message should be string: {actual}')
+
+    def assertLogEmpty(self):
+        """
+        Throw an error if there are events not matched by assertLog().
+        """
+        if self.logs:
+            raise AssertionError('Log is not empty: %s' % (self.logs,))
+
+    @classmethod
+    def createWithLogger(cls):
+        """
+        Return a LogAsserter and a Logger connected to it.
+        """
+        log_asserter = cls()
+        logger = logging.getLogger()
+        logger.addHandler(log_asserter)
+        logger.setLevel(0)  # Forward messages of every severity level.
+
+        return log_asserter, logger
+
+
+class TestLogAsserter(TestCase):
+    """
+    Check that LogAsserter captures logs.
+    """
+
+    def setUp(self):
+        super(TestLogAsserter, self).setUp()
+
+        self.log_asserter, self.logger = LogAsserter.createWithLogger()
+
+    def tearDown(self):
+        self.logger.removeHandler(self.log_asserter)
+        self.log_asserter.assertLogEmpty()
+        super(TestLogAsserter, self).tearDown()
+
+    def test_log_capture(self):
+        """
+        Log events captured by the list and asserted in order.
+        """
+        logging.debug('some debug message')
+        logging.info('some info message')
+        logging.warning('some warning message')
+        logging.error('some error message')
+        logging.critical('some CRITICAL message')
+
+        self.log_asserter.assertLog('some debug message')
+        self.log_asserter.assertLog('some info message')
+        self.log_asserter.assertLog('some warning message')
+        self.log_asserter.assertLog('some error message')
+        self.log_asserter.assertLog('some CRITICAL message')
+
+    def test_assertLogEmpty_empty(self):
+        """
+        assertLogEmpty does not throw an error when no logs were recorded.
+        """
+        self.log_asserter.assertLogEmpty()
+
+    def test_assertLogEmpty_not_empty(self):
+        """
+        assertLogEmpty throws an error when logs were recorded.
+        """
+        logging.debug('some debug message')
+        with self.assertRaises(AssertionError):
+            self.log_asserter.assertLogEmpty()
+        self.log_asserter.assertLog('some debug message')
+
+        # The log is again asserted to be empty during tearDown().
 
 
 class TestHandler(TestCase):
@@ -26,96 +126,20 @@ class TestHandler(TestCase):
 
     def setUp(self):
         super(TestHandler, self).setUp()
-        self.handler = Handler(trac_url='mock', github_token=github_token)
-        self.handler.trac = Mock()
-        self.logs = []
-        log.addObserver(self.recordEvent)
+        self.handler = Handler(github3.login(token=github_token))
 
-    def recordEvent(self, event):
-        """
-        Keep track of all event.
-        """
-        self.logs.append(event)
+        self.log_asserter, self.logger = LogAsserter.createWithLogger()
 
     def tearDown(self):
-        log.removeObserver(self.recordEvent)
-        for entry in self.logs:
-                raise AssertionError('Still log messages: %s' % (self.logs,))
+        self.logger.removeHandler(self.log_asserter)
+        self.log_asserter.assertLogEmpty()
         super(TestHandler, self).tearDown()
 
     def assertLog(self, expected):
         """
-        Check that oldest entry in the log has the text `expected`.
+        Forward to the LogAsserter method.
         """
-        current = self.logs.pop(0)
-        actual = current['log_text']
-        if actual != expected:
-            raise AssertionError('Bad log.\nExpecting:\n>%r<\nGot:\n>%r<' % (
-                expected, actual))
-
-        if not isinstance(actual, str):
-            raise AssertionError('Log message should be bytes: %r' % (actual,))
-
-    def test_push_not_master(self):
-        """
-        Event will not be process by push if it is not for master.
-        """
-        content = {
-            u'ref': u'refs/heads/780-branch',
-            }
-        event = Event(hook='some', name='push', content=content)
-
-        self.handler.dispatch(event)
-
-        self.assertFalse(self.handler.trac.getTicket.called)
-        self.assertLog(b'[some] Push not on master')
-
-    def test_push_no_ticket(self):
-        """
-        Event will not be process if commits does not contain a ticket.
-        """
-        content = {
-            u'ref': u'refs/heads/master',
-            u'commits': [{u'message': u'Normal message r\xc9sume'}],
-            }
-        event = Event(hook='some', name='push', content=content)
-
-        self.handler.dispatch(event)
-
-        self.assertFalse(self.handler.trac.getTicket.called)
-        self.assertLog(
-            b'Pull request has no ticket id in title: '
-            b'Normal message r\xc3\x89sume'
-            )
-
-    def test_push_with_ticket(self):
-        """
-        Event will be process if one of the commits has a ticket.
-        """
-        content = {
-            'ref': 'refs/heads/master',
-            'commits': [
-                {'message': u'Normal message r\xc9sume'},
-                {'message': u'[#123] Normal message r\xc9sume'},
-                {'message': u'Other message r\xc9sume'},
-                ],
-            }
-        event = Event(hook='some', name='push', content=content)
-
-        self.handler.dispatch(event)
-
-        self.assertTrue(self.handler.trac.getTicket.called)
-        self.handler.trac.getTicket.assert_called_once_with(123)
-        self.handler._current_ticket.close.assert_called_once()
-
-        self.assertLog(
-            b'Pull request has no ticket id in title: '
-            b'Normal message r\xc3\x89sume'
-            )
-        self.assertLog(
-            b'Pull request has no ticket id in title: '
-            b'Other message r\xc3\x89sume'
-            )
+        return self.log_asserter.assertLog(expected)
 
     def test_issue_comment_no_pull(self):
         """
@@ -136,55 +160,15 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertFalse(self.handler.trac.getTicket.called)
-        self.assertLog(
-            '[some] Not a comment on a pull request'
-            )
-
-    def test_issue_comment_no_ticket(self):
-        """
-        It will ignore the fact that the title has no associated Trac ticket
-        and will just process the requested action to the hooked PR.
-        """
-        content = {
-            u'issue': {
-                u'pull_request': {u'html_url': u'something'},
-                u'title': u'Some message r\xc9sume.',
-                u'body': u'r\xc9sume',
-                'number': 123,
-                'user': {'login': 'some-guy'},
-                },
-            u'comment': {
-                u'user': {u'login': u'somebody'},
-                u'body': 'r\xc9sume no action',
-                },
-            'repository': {
-                'full_name': 'chevah/github-hooks-server',
-                },
-            }
-        event = Event(hook='some', name='issue_comment', content=content)
-
-        self.handler.dispatch(event)
-
-        self.assertFalse(self.handler.trac.getTicket.called)
-        # Inform that Trac sync is not done.
-        self.assertLog(
-            b'Pull request has no ticket id in title: '
-            b'Some message r\xc3\x89sume.'
-            )
-        # Inform that event is going to be processed.
-        self.assertLog(
-            b'[some][None] New comment from somebody with reviewers []'
-            b'\nr\xc3\x89sume no action'
-            )
+        self.assertLog('[issue_comment] Not a comment on a pull request')
 
     def test_issue_comment_no_marker(self):
         """
-        Noting happen if comment does not contain a magic word.
+        Noting happens if comment does not contain a magic word.
         """
         content = {
             u'issue': {
@@ -202,15 +186,11 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertFalse(self.handler.trac.getTicket.called)
-        self.assertLog(
-            b'[some][12] New comment from somebody with reviewers []\n'
-            b'Simple words for simple persons r\xc3\x89sume.'
-            )
+        # The log is asserted to be empty during tearDown().
 
     def test_issue_comment_no_create(self):
         """
@@ -234,48 +214,11 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertLog(b'[some] Not a created issue comment.')
-
-    def test_pull_request_review_no_ticket_in_title(self):
-        """
-        Will process the PR request by updating the PR even if the PR title
-        is not associated with a Trac Ticket..
-        """
-        content = {
-            'pull_request': {
-                'title': 'Some message.',
-                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
-                'number': 8,
-                'user': {'login': 'adiroiban'},
-                },
-            'review': {
-                'user': {'login': 'tu'},
-                'body': 'anything here.',
-                'state': 'changes_requested',
-                },
-            'repository': {
-                'full_name': 'chevah/github-hooks-server',
-                },
-            }
-        event = Event(hook='some', name='pull_request_review', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'tu, adi'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
-
-        self.handler.dispatch(event)
-
-        self.assertFalse(self.handler.trac.getTicket.called)
-        self.assertLog(
-            b'Pull request has no ticket id in title: Some message.')
-        self.assertLog(
-            b'[some][None] New review from tu as changes_requested\n'
-            b'anything here.'
-            )
+        self.assertLog('[issue_comment] Not a created issue comment.')
 
     def test_pull_request_review_no_submit_action(self):
         """
@@ -298,11 +241,11 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='pull_request_review', content=content)
+        event = Event(name='pull_request_review', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertLog(b'[some] Not review submission.')
+        self.assertLog('[pull_request_review] Not review submission.')
 
 
 #
@@ -317,11 +260,11 @@ class TestHandler(TestCase):
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-changes', 'needs-merge', 'low'])
         issue.edit(assignees=['chevah-robot'])
-        initial_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-changes', initial_lables)
-        self.assertIn('needs-merge', initial_lables)
-        self.assertIn('low', initial_lables)
-        self.assertNotIn('needs-review', initial_lables)
+        initial_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-changes', initial_labels)
+        self.assertIn('needs-merge', initial_labels)
+        self.assertIn('low', initial_labels)
+        self.assertNotIn('needs-review', initial_labels)
         self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
 
     def assertReviewRequested(self):
@@ -331,17 +274,17 @@ class TestHandler(TestCase):
         Label is needs-review and reviewers are set as assignees.
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
-        last_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-review', last_lables)
-        self.assertIn('low', last_lables)
-        self.assertNotIn('needs-changes', last_lables)
-        self.assertNotIn('needs-merge', last_lables)
-        self.assertItemsEqual(
-            ['adiroiban', 'hcs0'], [u.login for u in issue.assignees])
+        last_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-review', last_labels)
+        self.assertIn('low', last_labels)
+        self.assertNotIn('needs-changes', last_labels)
+        self.assertNotIn('needs-merge', last_labels)
+        self.assertCountEqual(
+            ['adiroiban', 'danuker'], [u.login for u in issue.assignees])
 
     def test_issue_comment_needs_review(self):
         """
-        A needs review request is sent to ticket if body contains
+        A needs review request is sent to a PR if body contains
         **needs-review** marker and other review labels are removed.
         """
         body = u'One more r\xc9sume\r\n\r\n**needs-review**\r\n'
@@ -349,7 +292,7 @@ class TestHandler(TestCase):
             u'issue': {
                 u'pull_request': {u'html_url': u'something'},
                 u'title': u'[#12] Some message.',
-                u'body': u'bla\r\nreviewers @adiroiban @hcs0\r\nbla',
+                u'body': u'bla\r\nreviewers @adiroiban @danuker\r\nbla',
                 'number': 8,
                 'user': {'login': 'adiroiban'},
                 },
@@ -361,26 +304,60 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
+
+        self.prepareToNeedReview()
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertTrue(self.handler.trac.getTicket.called)
-        self.handler.trac.getTicket.assert_called_once_with(12)
-        rc = self.handler._current_ticket.requestReview
-        comment = (
-            u'somebody requested the review of this ticket.\n\n' + body)
-        rc.assert_called_once_with(
-            cc='adi, hcs',
-            comment=comment,
-            pull_url='something',
-            )
         self.assertLog(
-            b"[some][12] New comment from somebody with reviewers "
-            b"[u'adi', u'hcs']\nOne more r\xc3\x89sume\r\n\r\n"
-            b"**needs-review**\r\n"
+            "_setNeedsReview "
+            "event=issue_comment, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "reviewers=['adiroiban', 'danuker']"
             )
         self.assertReviewRequested()
+
+    def test_review_requested_needs_review(self):
+        """
+        When a review is requested from someone,
+        the "needs-review" action is also triggered.
+
+        There are two relevant actions under the `pull_request` event:
+        `review_requested` and `ready_for_review`.
+        https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+        """
+        actions = ['review_requested', 'ready_for_review']
+
+        for action in actions:
+            content = {
+                'action': action,
+                'pull_request': {
+                    'html_url': 'something',
+                    'title': '[#12] Some message.',
+                    'body': 'bla\r\nreviewers @adiroiban @danuker\r\nbla',
+                    'number': 8,
+                    'user': {'login': 'adiroiban'},
+                    },
+                'repository': {
+                    'full_name': 'chevah/github-hooks-server',
+                    },
+                }
+
+            self.prepareToNeedReview()
+            event = Event(name='pull_request', content=content)
+
+            self.handler.dispatch(event)
+
+            self.assertLog(
+                "_setNeedsReview "
+                "event=pull_request, "
+                "repo=chevah/github-hooks-server, "
+                "pull_id=8, "
+                "reviewers=['adiroiban', 'danuker']"
+                )
+            self.assertReviewRequested()
 
 #
 # --------------------- needs-changes -----------------------------------------
@@ -394,11 +371,11 @@ class TestHandler(TestCase):
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-merge', 'low'])
         issue.edit(assignees=['chevah-robot'])
-        initial_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-review', initial_lables)
-        self.assertIn('needs-merge', initial_lables)
-        self.assertIn('low', initial_lables)
-        self.assertNotIn('needs-changes', initial_lables)
+        initial_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-review', initial_labels)
+        self.assertIn('needs-merge', initial_labels)
+        self.assertIn('low', initial_labels)
+        self.assertNotIn('needs-changes', initial_labels)
         self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
 
     def assertChangesRequested(self):
@@ -408,17 +385,17 @@ class TestHandler(TestCase):
         Label is needs-changes and author is set at assignee.
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
-        last_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-changes', last_lables)
-        self.assertIn('low', last_lables)
-        self.assertNotIn('needs-review', last_lables)
-        self.assertNotIn('needs-merge', last_lables)
-        self.assertItemsEqual(
+        last_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-changes', last_labels)
+        self.assertIn('low', last_labels)
+        self.assertNotIn('needs-review', last_labels)
+        self.assertNotIn('needs-merge', last_labels)
+        self.assertCountEqual(
             ['adiroiban'], [u.login for u in issue.assignees])
 
     def test_issue_comment_request_changes(self):
         """
-        A needs changes request is sent to ticket if body contains
+        A needs changes request is sent to PR if body contains
         **needs-changes** marker and the PR is assigned to the original author.
         """
         self.prepareToRequestChanges()
@@ -438,27 +415,22 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertTrue(self.handler.trac.getTicket.called)
-        self.handler.trac.getTicket.assert_called_once_with(12)
-        rc = self.handler._current_ticket.requestChanges
-        comment = (
-            u'somebody needs-changes to this ticket.\n\n' +
-            content['comment']['body']
-            )
-        rc.assert_called_once_with(comment=comment)
         self.assertLog(
-            b'[some][12] New comment from somebody with reviewers []\n'
-            b'Simple r\xc3\x89sume \r\n**needs-changes** magic.'
+            '_setNeedsChanges '
+            'event=issue_comment, '
+            'repo=chevah/github-hooks-server, '
+            'pull_id=8, '
+            'author_name=adiroiban'
             )
         self.assertChangesRequested()
 
     def test_pull_request_review_needs_changes(self):
         """
-        When the review has the 'Request changes' action the ticket is put
+        When the review has the 'Request changes' action the PR is put
         into the needs-changes state.
         """
         self.prepareToRequestChanges()
@@ -478,27 +450,23 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='pull_request_review', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'tu, adi'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
+        event = Event(name='pull_request_review', content=content)
 
         self.handler.dispatch(event)
 
-        self.handler.trac.getTicket.assert_called_once_with(42)
-        ticket.requestChanges.assert_called_once_with(
-            comment=u'tu needs-changes to this ticket.\n\nanything here.')
         self.assertLog(
-            b'[some][42] New review from tu as changes_requested\n'
-            b'anything here.'
+            '_setNeedsChanges '
+            'event=pull_request_review, '
+            'repo=chevah/github-hooks-server, '
+            'pull_id=8, '
+            'author_name=adiroiban'
             )
         self.assertChangesRequested()
 
 #
 # --------------------- changes-approved -> needs-merge -----------------------
 #
-    def prepareToAproveLast(self):
+    def prepareToApproveLast(self):
         """
         Set up the PR so that we can approve the changes as last person.
 
@@ -507,11 +475,11 @@ class TestHandler(TestCase):
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
         issue.edit(assignees=['chevah-robot'])
-        initial_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-review', initial_lables)
-        self.assertIn('needs-changes', initial_lables)
-        self.assertIn('low', initial_lables)
-        self.assertNotIn('needs-merge', initial_lables)
+        initial_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-review', initial_labels)
+        self.assertIn('needs-changes', initial_labels)
+        self.assertIn('low', initial_labels)
+        self.assertNotIn('needs-merge', initial_labels)
         self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
 
     def assertMergeRequested(self):
@@ -521,20 +489,20 @@ class TestHandler(TestCase):
         Label is needs-merge and author is set at assignee.
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
-        last_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-merge', last_lables)
-        self.assertIn('low', last_lables)
-        self.assertNotIn('needs-review', last_lables)
-        self.assertNotIn('needs-changes', last_lables)
-        self.assertItemsEqual(
+        last_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-merge', last_labels)
+        self.assertIn('low', last_labels)
+        self.assertNotIn('needs-review', last_labels)
+        self.assertNotIn('needs-changes', last_labels)
+        self.assertCountEqual(
             ['adiroiban'], [u.login for u in issue.assignees])
 
     def test_issue_comment_approved_last(self):
         """
-        A needs-merge request is sent to ticket if body contains
+        A needs-merge request is sent to PR if body contains
         the `changes-approved` marker and the user is the last reviewer.
         """
-        self.prepareToAproveLast()
+        self.prepareToApproveLast()
         content = {
             'issue': {
                 'pull_request': {u'html_url': u'something'},
@@ -555,37 +523,26 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'chevah-robot'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertTrue(self.handler.trac.getTicket.called)
-        self.handler.trac.getTicket.assert_called_once_with(12)
-        rc = self.handler._current_ticket.requestMerge
-        rc.assert_called_once_with(
-            cc='chevah-robot, adi',
-            comment=(
-                u'chevah-robot changes-approved.\n'
-                u'No more reviewers.\n'
-                u'Ready to merge.\n\n' + content['comment']['body']),
-            )
         self.assertLog(
-            b"[some][12] New comment from chevah-robot with reviewers "
-            b"[u'chevah-robot', u'adi']\nSimple words r\xc3\x89sume \r\n"
-            b"**changes-approved** p."
+            "_setApproveChanges "
+            "event=issue_comment, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "author_name=adiroiban, "
+            "reviewer_name=chevah-robot"
             )
         self.assertMergeRequested()
 
     def test_pull_request_review_approved_last(self):
         """
         When the review was approved and no other reviewers are expected,
-        the ticket is set into the needs-merge state.
+        the PR is set into the needs-merge state.
         """
-        self.prepareToAproveLast()
+        self.prepareToApproveLast()
         content = {
             'pull_request': {
                 'title': '[#42] Some message.',
@@ -602,25 +559,17 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='pull_request_review', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'chevah-robot'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
+        event = Event(name='pull_request_review', content=content)
 
         self.handler.dispatch(event)
 
-        self.handler.trac.getTicket.assert_called_once_with(42)
-        ticket.requestMerge.assert_called_once_with(
-            cc='chevah-robot, adi',
-            comment=(
-                u'chevah-robot changes-approved.\nNo more reviewers.\n'
-                'Ready to merge.\n\nanything here.'
-                )
-            )
         self.assertLog(
-            b'[some][42] New review from chevah-robot as approved\n'
-            b'anything here.'
+            '_setApproveChanges '
+            'event=pull_request_review, '
+            'repo=chevah/github-hooks-server, '
+            'pull_id=8, '
+            'author_name=adiroiban, '
+            'reviewer_name=chevah-robot'
             )
         self.assertMergeRequested()
 
@@ -635,12 +584,12 @@ class TestHandler(TestCase):
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
         issue.edit(assignees=['chevah-robot', 'adiroiban'])
-        initial_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-review', initial_lables)
-        self.assertIn('needs-changes', initial_lables)
-        self.assertIn('low', initial_lables)
-        self.assertNotIn('needs-merge', initial_lables)
-        self.assertItemsEqual(
+        initial_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-review', initial_labels)
+        self.assertIn('needs-changes', initial_labels)
+        self.assertIn('low', initial_labels)
+        self.assertNotIn('needs-merge', initial_labels)
+        self.assertCountEqual(
             ['chevah-robot', 'adiroiban'], [u.login for u in issue.assignees])
 
     def assertMergeStillNeeded(self):
@@ -648,17 +597,17 @@ class TestHandler(TestCase):
         Check that merge is still needed for the PR.
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
-        last_lables = [l.name for l in issue.labels()]
-        self.assertIn('needs-review', last_lables)
-        self.assertIn('low', last_lables)
-        self.assertIn('needs-changes', last_lables)
+        last_labels = [l.name for l in issue.labels()]
+        self.assertIn('needs-review', last_labels)
+        self.assertIn('low', last_labels)
+        self.assertIn('needs-changes', last_labels)
         self.assertEqual(
             ['chevah-robot'], [u.login for u in issue.assignees])
 
     def test_issue_comment_approved_still_reviewers(self):
         """
         When body contains the `changes-approved` marker and there are still
-        reviewers, the ticket is kept in the same state and new CC list is
+        reviewers, the PR is kept in the same state and new CC list is
         updated.
         """
         self.prepareToAproveAnLeaveForReview()
@@ -678,34 +627,24 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='issue_comment', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'chevah-robot, adi'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertTrue(self.handler.trac.getTicket.called)
-        self.handler.trac.getTicket.assert_called_once_with(12)
-        rc = self.handler._current_ticket.update
-        comment = (
-            'adi changes-approved.\n\n' + content['comment']['body'])
-        rc.assert_called_once_with(
-            comment=comment,
-            attributes={'cc': 'chevah-robot'},
-            )
         self.assertLog(
-            b"[some][12] New comment from adi "
-            b"with reviewers [u'chevah-robot', u'adi']\n"
-            b"Simple words \r\n**changes-approved** magic."
+            "_setApproveChanges "
+            "event=issue_comment, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "author_name=adiroiban, "
+            "reviewer_name=adiroiban"
             )
         self.assertMergeStillNeeded()
 
     def test_pull_request_review_approved_still_reviewers(self):
         """
         When the review was approved and there are other reviewers,
-        the ticket is left in needs-review and reviewer is removed.
+        the PR is left in needs-review and reviewer is removed.
         """
         self.prepareToAproveAnLeaveForReview()
         content = {
@@ -724,25 +663,17 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='pull_request_review', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'adi, chevah-robot'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
+        event = Event(name='pull_request_review', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertTrue(self.handler.trac.getTicket.called)
-        self.handler.trac.getTicket.assert_called_once_with(42)
-        rc = self.handler._current_ticket.update
-        comment = (
-            'adi changes-approved.\n\n' + content['review']['body'])
-        rc.assert_called_once_with(
-            comment=comment,
-            attributes={'cc': 'chevah-robot'},
-            )
         self.assertLog(
-            b'[some][42] New review from adi as approved\nanything here.'
+            '_setApproveChanges '
+            'event=pull_request_review, '
+            'repo=chevah/github-hooks-server, '
+            'pull_id=8, '
+            'author_name=pr-author-ignored, '
+            'reviewer_name=adiroiban'
             )
         self.assertMergeStillNeeded()
 
@@ -766,36 +697,11 @@ class TestHandler(TestCase):
                 'full_name': 'chevah/github-hooks-server',
                 },
             }
-        event = Event(hook='some', name='pull_request_review', content=content)
-
-        ticket = Mock()
-        ticket.attributes = {'cc': 'tu, adi'}
-        self.handler.trac.getTicket = Mock(return_value=ticket)
+        event = Event(name='pull_request_review', content=content)
 
         self.handler.dispatch(event)
 
-        self.assertFalse(self.handler.trac.getTicket.called)
-        self.assertLog(
-            b'[some][42] New review from tu as commented\n'
-            b'anything here.'
-            )
-
-    def test_getTicketFromTitle(self):
-        """
-        test_getTicketFromTitle will parse the message and return
-        the ticket id.
-        """
-        message = '[#12] Hello r\xc9sume.'
-        ticket_id = self.handler._getTicketFromTitle(message)
-        self.assertEqual(12, ticket_id)
-
-        message = 'Simle words 12 r\xc9sume.'
-        ticket_id = self.handler._getTicketFromTitle(message)
-        self.assertIsNone(ticket_id)
-
-        self.assertLog(
-            b'Pull request has no ticket id in title: '
-            b'Simle words 12 r\xc3\x89sume.')
+        # The log is asserted to be empty during tearDown().
 
     def test_getReviewers_no(self):
         """
@@ -809,7 +715,7 @@ class TestHandler(TestCase):
 
     def test_getReviewers_ok(self):
         """
-        Reviewers are returned as list using one of the reviewers markers.
+        Reviewers are returned as list using any of the reviewers markers.
         """
         markers = [
             'reviewer',
@@ -818,18 +724,12 @@ class TestHandler(TestCase):
             'reviewers:',
             ]
 
-        user_filter = {
-            'ala': 'celalalt',
-            'bla': 'tra',
-        }
-        self.handler.USERS_GITHUB_TO_TRAC = user_filter
-
         for marker in markers:
             message = u'Simple r\xc9sume\r\n%s @io @ala bla\r\nbla' % (marker)
 
             result = self.handler._getReviewers(message)
 
-            self.assertEqual([u'io', u'celalalt'], result)
+            self.assertEqual([u'io', u'ala'], result)
 
     def test_needsReview_false(self):
         """
@@ -933,7 +833,7 @@ class TestHandler(TestCase):
         self.assertEqual(['ala', 'bala'], result)
 
         self.assertLog(
-            b'Current user "popa" not in the list of reviewers ala, bala')
+            'Current user "popa" not in the list of reviewers ala, bala')
 
     def test_getRemainingReviewers_found(self):
         """

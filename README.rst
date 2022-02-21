@@ -23,6 +23,7 @@ To create a working virtual environment::
 
     virtualenv -p 3.8 venv  # Last Python version supported by serverless-azure-functions
     . venv/bin/activate
+    pip install poetry
     poetry install
     nodeenv venv/node -n 17.1.0
     . venv/node/bin/activate
@@ -50,6 +51,10 @@ To run offline for testing purposes, once you have a virtual environment::
     serverless offline
 
 
+Now you can send a POST request to the `hook` function, or a GET request to the `ping` function:
+
+    http://localhost:7071/api/ping
+
 To expose the offline server running on port 7071 to the Web,
 you can use PageKite::
 
@@ -63,6 +68,8 @@ while easily iterating.
 
 Deployment
 ==========
+
+Make sure `config.ini` has an appropriate `github-token` value.
 
 To deploy to Azure Functions::
 
@@ -86,6 +93,13 @@ Troubleshooting
 
 If you get an `Error: EISDIR: illegal operation on a directory, read` during
 deployment, it worked to run `npm install` and try deployment again.
+
+If you get an `Error: Entry not found in cache.` right after
+`Serverless: Creating resource group: sls-weur-dev-githubhooks-rg`,
+remove `~/.azure/slsTokenCache.json` to forget the login tokens and try again
+(which will prompt a re-login).
+See `here <https://github.com/serverless/serverless-azure-functions/issues/412>`_
+for details.
 
 If you keep seeing `Function App not ready. Retry XX of 30...`,
 check out the "Diagnose and solve problems" feature of

@@ -2,20 +2,29 @@
 This is the part where requests are dispatched.
 """
 
-try:
-    import json
-    # Shut up the linter.
-    json
-except ImportError:
-    import simplejson as json
-
+import json
 import logging
+import sys
 from urllib.parse import parse_qs
 
 import azure.functions as func
+import github3
 
 from chevah.github_hooks_server.configuration import CONFIGURATION
 from chevah.github_hooks_server.handler import Handler
+
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logging.critical(
+        "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+
+sys.excepthook = handle_exception
 
 
 class Event(object):
@@ -116,10 +125,7 @@ def parse_request(req: func.HttpRequest):
 
 # Set up our hook handler.
 credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
-handler = Handler(
-    trac_url='https://%s/login/xmlrpc' % (credentials_and_address, ),
-    github_token=CONFIGURATION['github-token'],
-    )
+handler = Handler(github3.login(token=CONFIGURATION['github-token']))
 
 
 def handle_event(event):
