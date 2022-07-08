@@ -1,11 +1,13 @@
 github-hooks-server
 ===================
 
-Custom handling of GitHub hooks for Chevah Project.
+Custom handling of GitHub pull requests.
 
-It keeps Trac and GitHub in sync based on Chevah's own workflow.
+It manages the labels for a PR to keep track of the review state for a PR:
 
-It manages the labels for a PR to keep track of the review state for a PR.
+* needs-review
+* needs-changes
+* needs-merge
 
 The GitHub Token needs to have write permissions to the managed repo.
 

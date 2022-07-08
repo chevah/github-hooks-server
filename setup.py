@@ -47,7 +47,6 @@ distribution = setup(
         'github3.py==3.0.0',
         'azure-functions==1.7.2',
         'azure-functions-worker==1.1.9',
-        'twisted==21.7.0',
         ],
     extras_require={
         'dev': [
