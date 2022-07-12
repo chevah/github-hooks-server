@@ -61,7 +61,8 @@ class Handler(object):
 
         repo = event.content['repository']['full_name']
         pull_id = event.content['pull_request']['number']
-        reviewers = self._getReviewers(event.content['pull_request']['body'])
+        reviewers = self._getReviewers(
+            message=event.content['pull_request']['body'], repo=repo)
 
         self._setNeedsReview(
             repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
