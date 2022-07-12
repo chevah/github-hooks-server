@@ -15,6 +15,17 @@ def load_configuration(path):
     if not CONFIGURATION['github-hook-secret']:
         CONFIGURATION['github-hook-secret'] = None
 
+    if CONFIGURATION['default-reviewers']:
+        pairs = [
+            pair.split(':')
+            for pair in CONFIGURATION['default-reviewers'].split()
+            ]
+        CONFIGURATION['default-reviewers'] = {
+            k: v.split(',') for k, v in pairs
+            }
+
+    return CONFIGURATION
+
 
 # This should be private.
 CONFIGURATION = {
@@ -28,7 +39,9 @@ CONFIGURATION = {
     'github-hook-secret': None,
 
     # GitHub API key used by react on GitHub.
-    'github-token': 'set-a-token'
+    'github-token': 'set-a-token',
+
+    'default-reviewers': {},
     }
 
 load_configuration('config.ini')

@@ -20,8 +20,9 @@ class Handler(object):
     RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
     RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
 
-    def __init__(self, github):
+    def __init__(self, github, config):
         self._github = github
+        self._config = config
         if not self._github:
             raise RuntimeError('Failed to init GitHub.')
 
@@ -216,7 +217,8 @@ class Handler(object):
 
         author_name = event.content['issue']['user']['login']
 
-        reviewers = self._getReviewers(event.content['issue']['body'])
+        reviewers = self._getReviewers(
+            message=event.content['issue']['body'], repo=repo)
 
         if self._needsReview(body):
             self._setNeedsReview(
@@ -240,11 +242,14 @@ class Handler(object):
                 event=event,
                 )
 
-    def _getReviewers(self, message):
+    def _getReviewers(self, message, repo):
         """
         Return the list of reviewers as GitHub names.
         """
-        results = []
+        results = self._defaultReviewers(repo)
+        if not message:
+            return results
+
         for line in message.splitlines():
             result = re.match(self.RE_REVIEWERS, line)
             if not result:
@@ -253,6 +258,13 @@ class Handler(object):
                 if word.startswith('@'):
                     results.append(word[1:].strip())
         return results
+
+    def _defaultReviewers(self, repo):
+        """
+        Returns the list of default reviewers configured for a repo.
+        If none is configured, returns empty list.
+        """
+        return self._config.get('default-reviewers', {}).get(repo, [])
 
     def _needsChanges(self, content):
         """

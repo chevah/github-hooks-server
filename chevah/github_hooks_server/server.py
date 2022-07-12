@@ -125,7 +125,9 @@ def parse_request(req: func.HttpRequest):
 
 # Set up our hook handler.
 credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
-handler = Handler(github3.login(token=CONFIGURATION['github-token']))
+handler = Handler(
+    github=github3.login(token=CONFIGURATION['github-token']),
+    config=CONFIGURATION)
 
 
 def handle_event(event):
