@@ -285,7 +285,7 @@ class TestHandler(TestCase):
         """
         message = u'Simple message r\xc9sume\r\nSimple words.'
 
-        result = self.handler._getReviewers(message, repo=None)
+        result = self.handler._getReviewers(message, None, 'ready_for_review')
 
         self.assertEqual([], result)
 
@@ -303,7 +303,7 @@ class TestHandler(TestCase):
         for marker in markers:
             message = u'Simple r\xc9sume\r\n%s @io @ala bla\r\nbla' % (marker)
 
-            result = self.handler._getReviewers(message, repo=None)
+            result = self.handler._getReviewers(message, None, 'ready_for_review')
 
             self.assertEqual([u'io', u'ala'], result)
 
@@ -313,7 +313,8 @@ class TestHandler(TestCase):
 
         Example: https://github.com/twisted/twisted/pull/1734
         """
-        result = self.handler._getReviewers(message=None, repo=None)
+        result = self.handler._getReviewers(
+            message=None, repo=None, action='ready_for_review')
 
         self.assertEqual([], result)
 
@@ -321,7 +322,8 @@ class TestHandler(TestCase):
         """
         Auto-fills reviewers if there are defaults for the repo.
         """
-        result = self.handler._getReviewers(None, 'test_org/test_repo')
+        result = self.handler._getReviewers(
+            message=None, repo='test_org/test_repo', action='ready_for_review')
 
         self.assertEqual(['test_org/test_reviewers'], result)
 
@@ -329,7 +331,9 @@ class TestHandler(TestCase):
         """
         Returns all reviewers if there are multiple ones for a repo.
         """
-        result = self.handler._getReviewers(None, 'test_org/test_repo2')
+        result = self.handler._getReviewers(
+            message=None, repo='test_org/test_repo2', action='ready_for_review'
+            )
 
         self.assertEqual(['reviewer1', 'reviewer2'], result)
 
@@ -426,34 +430,6 @@ class TestHandler(TestCase):
 
             self.assertTrue(result)
 
-    def test_getRemainingReviewers_not_found(self):
-        """
-        The list is not changes if user is not found in the list.
-        """
-        result = self.handler._getRemainingReviewers('ala, bala', 'popa')
-
-        self.assertEqual(['ala', 'bala'], result)
-
-        self.assertLog(
-            'Current user "popa" not in the list of reviewers ala, bala')
-
-    def test_getRemainingReviewers_found(self):
-        """
-        The list without the user is returned if user is found in the list.
-        """
-        result = self.handler._getRemainingReviewers(
-            'ala, bala, trala', 'bala')
-
-        self.assertEqual(['ala', 'trala'], result)
-
-    def test_getRemainingReviewers_empty(self):
-        """
-        Empty list is returned when cc_list contains only the ser..
-        """
-        result = self.handler._getRemainingReviewers('bala', 'bala')
-
-        self.assertEqual([], result)
-
 
 class TestLiveHandler(TestCase):
     """
@@ -479,6 +455,9 @@ class TestLiveHandler(TestCase):
 #
 # --------------------- needs-review ------------------------------------------
 #
+# The creator of the PR (and review-requester) is adiroiban,
+# and the reviewers are danuker and chevah-robot.
+
     def prepareToNeedReview(self):
         """
         Prepare the PR so that it will need review.
@@ -487,28 +466,37 @@ class TestLiveHandler(TestCase):
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-changes', 'needs-merge', 'low'])
-        issue.edit(assignees=['chevah-robot'])
+        issue.edit(assignees=['adiroiban'])
+        pr = issue.pull_request()
+        pr.delete_review_requests(pr.requested_reviewers)
         initial_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-changes', initial_labels)
         self.assertIn('needs-merge', initial_labels)
         self.assertIn('low', initial_labels)
         self.assertNotIn('needs-review', initial_labels)
-        self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
+        self.assertEqual(['adiroiban'], [u.login for u in issue.assignees])
+        self.assertEqual([], [u.login for u in pr.requested_reviewers])
+        return issue, pr
 
-    def assertReviewRequested(self):
+    def assertReviewRequested(self, from_users=None):
         """
         Check that the review was requested for the PR.
 
-        Label is needs-review and reviewers are set as assignees.
+        Label is needs-review, reviewers are set as assignees,
+        and a review is requested from them.
         """
+        if from_users is None:
+            from_users = ['danuker', 'chevah-robot']
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         last_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', last_labels)
         self.assertIn('low', last_labels)
         self.assertNotIn('needs-changes', last_labels)
         self.assertNotIn('needs-merge', last_labels)
+        self.assertCountEqual(from_users, [u.login for u in issue.assignees])
         self.assertCountEqual(
-            ['adiroiban', 'danuker'], [u.login for u in issue.assignees])
+            from_users,
+            [u.login for u in issue.pull_request().requested_reviewers])
 
     def test_issue_comment_needs_review(self):
         """
@@ -520,7 +508,7 @@ class TestLiveHandler(TestCase):
             u'issue': {
                 u'pull_request': {u'html_url': u'something'},
                 u'title': u'[#12] Some message.',
-                u'body': u'bla\r\nreviewers @adiroiban @danuker\r\nbla',
+                u'body': u'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
                 'number': 8,
                 'user': {'login': 'adiroiban'},
                 },
@@ -543,13 +531,14 @@ class TestLiveHandler(TestCase):
             "event=issue_comment, "
             "repo=chevah/github-hooks-server, "
             "pull_id=8, "
-            "reviewers=['adiroiban', 'danuker']"
+            "reviewers=['danuker', 'chevah-robot']"
             )
         self.assertReviewRequested()
 
     def test_review_requested_needs_review(self):
         """
         When a review is requested from someone,
+        and there is a reviewers list in the PR description,
         the "needs-review" action is also triggered.
 
         There are two relevant actions under the `pull_request` event:
@@ -564,7 +553,7 @@ class TestLiveHandler(TestCase):
                 'pull_request': {
                     'html_url': 'something',
                     'title': '[#12] Some message.',
-                    'body': 'bla\r\nreviewers @adiroiban @danuker\r\nbla',
+                    'body': 'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
                     'number': 8,
                     'user': {'login': 'adiroiban'},
                     },
@@ -583,9 +572,96 @@ class TestLiveHandler(TestCase):
                 "event=pull_request, "
                 "repo=chevah/github-hooks-server, "
                 "pull_id=8, "
-                "reviewers=['adiroiban', 'danuker']"
+                "reviewers=['danuker', 'chevah-robot']"
                 )
-            self.assertReviewRequested()
+
+        self.assertReviewRequested()
+
+    def test_review_requested_without_reviewers_in_description(self):
+        """
+        When a user requests a review,
+        but the PR description does not have a reviewer list,
+        the "needs-review" label is set.
+
+        Does not automatically ask for any other review, because:
+        1. the requester has the ability to request reviews
+        2. it is assumed the requester selected everyone they need.
+
+        Does not delete pre-existing review requests (here, for danuker).
+        """
+        content = {
+            'action': 'review_requested',
+            'pull_request': {
+                'html_url': 'something',
+                'title': '[#12] Some message.',
+                'body': 'bla\r\nbla',
+                'number': 8,
+                'user': {'login': 'adiroiban'},
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+
+        issue, stale_pr = self.prepareToNeedReview()
+        stale_pr.create_review_requests(['danuker'])
+
+        event = Event(name='pull_request', content=content)
+
+        self.handler.dispatch(event)
+
+        self.assertLog(
+            "_setNeedsReview "
+            "event=pull_request, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "reviewers=['danuker']"
+            )
+        self.assertReviewRequested(from_users=['danuker'])
+        raise ValueError('Test must leave already-requested reviews alone.')
+
+    def test_needs_review_nonexistent_user(self):
+        """
+        When a reviewer can not be assigned or asked to review,
+        the labels are still set.
+        """
+        body = u'One more r\xc9sume\r\n\r\n**needs-review**\r\n'
+        content = {
+            u'issue': {
+                u'pull_request': {u'html_url': u'something'},
+                u'title': u'[#12] Some message.',
+                u'body': u'bla\r\nreviewers @nonexistent_user\r\nbla',
+                'number': 8,
+                'user': {'login': 'adiroiban'},
+                },
+            u'comment': {
+                u'user': {u'login': 'somebody'},
+                u'body': body,
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+
+        self.prepareToNeedReview()
+        event = Event(name='issue_comment', content=content)
+
+        self.handler.dispatch(event)
+
+        self.assertLog(
+            "_setNeedsReview "
+            "event=issue_comment, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "reviewers=['nonexistent_user']"
+            )
+
+        self.assertLog(
+            "_setNeedsReview failed to assign ['nonexistent_user'] "
+            "for chevah/github-hooks-server #8. "
+            "Emptying assignees."
+            )
+        self.assertReviewRequested(from_users=[])
 
 #
 # --------------------- needs-changes -----------------------------------------

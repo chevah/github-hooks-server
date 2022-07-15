@@ -5,6 +5,7 @@ import logging
 import re
 
 import github3
+from github3.exceptions import UnprocessableEntity
 
 
 class Handler(object):
@@ -61,11 +62,13 @@ class Handler(object):
 
         repo = event.content['repository']['full_name']
         pull_id = event.content['pull_request']['number']
-        reviewers = self._getReviewers(
-            message=event.content['pull_request']['body'], repo=repo)
+        message = event.content['pull_request']['body']
 
         self._setNeedsReview(
-            repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
+            repo=repo,
+            pull_id=pull_id,
+            reviewers=self._getReviewers(action, message, repo),
+            event=event
             )
 
     def pull_request_review(self, event):
@@ -137,7 +140,17 @@ class Handler(object):
         if issue:
             issue.add_labels('needs-review')
             self._removeLabels(issue, ['needs-changes', 'needs-merge'])
-            issue.edit(assignees=reviewers)
+            issue.pull_request().create_review_requests(reviewers)
+            try:
+                issue.edit(assignees=reviewers)
+            except UnprocessableEntity:
+                logging.error(
+                    '_setNeedsReview failed to assign %s for %s #%s. '
+                    'Emptying assignees.' % (
+                        reviewers, repo, pull_id
+                        )
+                    )
+                issue.edit(assignees=[])
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
@@ -158,6 +171,8 @@ class Handler(object):
         if issue:
             issue.add_labels('needs-changes')
             self._removeLabels(issue, ['needs-review', 'needs-merge'])
+            pr = issue.pull_request()
+            pr.delete_review_requests(pr.requested_reviewers)
             issue.edit(assignees=[author_name])
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
@@ -178,18 +193,15 @@ class Handler(object):
 
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, pull_id)
-
+        pr = issue.pull_request()
         if issue:
-            current_reviewers = {u.login for u in issue.assignees}
-            remaining_reviewers = current_reviewers - {reviewer_name}
-
-            if not remaining_reviewers:
+            if not pr.requested_reviewers:
                 # All reviewers done
                 issue.add_labels('needs-merge')
                 self._removeLabels(issue, ['needs-review', 'needs-changes'])
                 issue.edit(assignees=[author_name])
             else:
-                issue.edit(assignees=list(remaining_reviewers))
+                issue.edit(assignees=list(pr.requested_reviewers))
 
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
@@ -218,8 +230,7 @@ class Handler(object):
 
         author_name = event.content['issue']['user']['login']
 
-        reviewers = self._getReviewers(
-            message=event.content['issue']['body'], repo=repo)
+        reviewers = self._getReviewersFromMessage(message=event.content['issue']['body'])
 
         if self._needsReview(body):
             self._setNeedsReview(
@@ -243,11 +254,28 @@ class Handler(object):
                 event=event,
                 )
 
-    def _getReviewers(self, message, repo):
+    def _getReviewers(self, message, repo, action):
         """
-        Return the list of reviewers as GitHub names.
+        Identifies the accounts to request reviews from.
+
+        If a user manually requested a review ('review_requested' action),
+        and did not specify reviewers in the PR description,
+        do not request any other reviews.
+
+        Possible actions are specified in the `pull_request` method.
         """
-        results = self._defaultReviewers(repo)
+        reviewers = self._getReviewersFromMessage(message)
+
+        if not reviewers and action != 'review_requested':
+            reviewers = self._getDefaultReviewers(repo=repo)
+        return reviewers
+
+    def _getReviewersFromMessage(self, message):
+        """
+        Return the list of reviewers mentioned in the given text message
+        (a PR description).
+        """
+        results = []
         if not message:
             return results
 
@@ -260,7 +288,7 @@ class Handler(object):
                     results.append(word[1:].strip())
         return results
 
-    def _defaultReviewers(self, repo):
+    def _getDefaultReviewers(self, repo):
         """
         Returns the list of default reviewers configured for a repo.
         If none is configured, returns empty list.
@@ -296,19 +324,3 @@ class Handler(object):
             if result:
                 return True
         return False
-
-    def _getRemainingReviewers(self, cc_string, user):
-        """
-        Remove user from cc list and  return the remaining list of
-        reviewers.
-        """
-        reviewers = []
-        for review in cc_string.split(','):
-            reviewers.append(review.strip())
-        try:
-            reviewers.remove(user)
-        except ValueError:
-            logging.error(
-                'Current user "%s" not in the list of reviewers %s' % (
-                    user, cc_string))
-        return reviewers
