@@ -88,6 +88,10 @@ class Handler(object):
         pull_id = event.content['pull_request']['number']
         author_name = event.content['pull_request']['user']['login']
         reviewer_name = event.content['review']['user']['login']
+        remaining_reviewers = [
+            u['login']
+            for u in event.content['pull_request']['requested_reviewers']
+            ]
 
         if state == 'approved':
             # An approved review comment.
@@ -96,6 +100,7 @@ class Handler(object):
                 pull_id=pull_id,
                 author_name=author_name,
                 reviewer_name=reviewer_name,
+                remaining_reviewers=remaining_reviewers,
                 event=event,
                 )
         elif state == 'changes_requested':
@@ -178,7 +183,13 @@ class Handler(object):
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
     def _setApproveChanges(
-            self, repo, pull_id, author_name, reviewer_name, event):
+            self,
+            repo,
+            pull_id,
+            author_name,
+            reviewer_name,
+            remaining_reviewers,
+            event):
         """
         Update the PR with `pull_id` as approved.
         """
@@ -188,20 +199,20 @@ class Handler(object):
             f'repo={repo}, '
             f'pull_id={pull_id}, '
             f'author_name={author_name}, '
-            f'reviewer_name={reviewer_name}'
+            f'reviewer_name={reviewer_name}, '
+            f'remaining_reviewers={remaining_reviewers}'
             )
 
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, pull_id)
-        pr = issue.pull_request()
         if issue:
-            if not pr.requested_reviewers:
+            if not remaining_reviewers:
                 # All reviewers done
                 issue.add_labels('needs-merge')
                 self._removeLabels(issue, ['needs-review', 'needs-changes'])
                 issue.edit(assignees=[author_name])
             else:
-                issue.edit(assignees=list(pr.requested_reviewers))
+                issue.edit(assignees=remaining_reviewers)
 
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
@@ -232,6 +243,7 @@ class Handler(object):
 
         reviewers = self._getReviewersFromMessage(message=event.content['issue']['body'])
 
+
         if self._needsReview(body):
             self._setNeedsReview(
                 repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
@@ -246,11 +258,27 @@ class Handler(object):
                 )
 
         elif self._changesApproved(body):
+            # We only need to delete the review request
+            # when the reviewer made a "regular" comment,
+            # without creating a GitHub review.
+            username, repository = repo.split('/', 1)
+            pull = self._github.pull_request(username, repository, pull_id)
+            pull.delete_review_requests([reviewer_name])
+
+            # The PR model does not update the `requested_reviewers`
+            # after deleting the review request,
+            # so we have to manually remove it.
+            remaining_reviewers = list(
+                set(u.login for u in pull.requested_reviewers) -
+                {reviewer_name}
+                )
+
             self._setApproveChanges(
                 repo=repo,
                 pull_id=pull_id,
                 author_name=author_name,
                 reviewer_name=reviewer_name,
+                remaining_reviewers=remaining_reviewers,
                 event=event,
                 )
 
