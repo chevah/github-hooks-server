@@ -148,6 +148,25 @@ class TestHandler(TestCase):
         """
         return self.log_asserter.assertLog(expected)
 
+    def test_shouldHandlePull(self):
+        """
+        Return whether we should handle the given pull request.
+        See test_config.ini for the repos skipped during testing.
+        """
+        # No error.
+        self.assertTrue(self.handler._shouldHandlePull('chevah/no-skip', '8'))
+        self.assertTrue(self.handler._shouldHandlePull('chevah/no-skip', 8))
+
+        self.assertFalse(self.handler._shouldHandlePull('chevah/to-skip', 7))
+        self.assertFalse(self.handler._shouldHandlePull('chevah/to-skip', 8))
+        self.assertFalse(self.handler._shouldHandlePull('chevah/to-skip', '7'))
+        self.assertFalse(self.handler._shouldHandlePull('chevah/to-skip', '8'))
+
+        self.assertTrue(self.handler._shouldHandlePull('chevah/pr-skip', 7))
+        self.assertFalse(self.handler._shouldHandlePull('chevah/pr-skip', 8))
+        self.assertTrue(self.handler._shouldHandlePull('chevah/pr-skip', '7'))
+        self.assertFalse(self.handler._shouldHandlePull('chevah/pr-skip', '8'))
+
     def test_issue_comment_no_pull(self):
         """
         Nothing happens when issue_comment is not on a pull request.

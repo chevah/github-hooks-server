@@ -7,6 +7,8 @@ import re
 import github3
 from github3.exceptions import UnprocessableEntity
 
+from chevah.github_hooks_server.server import ServerException
+
 
 class Handler(object):
     """
@@ -64,6 +66,8 @@ class Handler(object):
         pull_id = event.content['pull_request']['number']
         message = event.content['pull_request']['body']
 
+        self._raiseIfShouldSkip(repo, pull_id)
+
         self._setNeedsReview(
             repo=repo,
             pull_id=pull_id,
@@ -92,6 +96,8 @@ class Handler(object):
             u['login']
             for u in event.content['pull_request']['requested_reviewers']
             ]
+
+        self._raiseIfShouldSkip(repo, pull_id)
 
         if state == 'approved':
             # An approved review comment.
@@ -236,13 +242,14 @@ class Handler(object):
         repo = event.content['repository']['full_name']
         pull_id = event.content['issue']['number']
 
+        self._raiseIfShouldSkip(repo, pull_id)
+
         body = event.content['comment']['body']
         reviewer_name = event.content['comment']['user']['login']
 
         author_name = event.content['issue']['user']['login']
 
         reviewers = self._getReviewersFromMessage(message=event.content['issue']['body'])
-
 
         if self._needsReview(body):
             self._setNeedsReview(
@@ -352,3 +359,22 @@ class Handler(object):
             if result:
                 return True
         return False
+
+    def _shouldHandlePull(self, repo, number):
+        """
+        Return True if we should handle this pull request.
+        """
+        repos = self._config['skip'].split(',')
+        print(repos)
+        if repo in repos:
+            return False
+        if f'{repo}#{number}' in repos:
+            return False
+        return True
+
+    def _raiseIfShouldSkip(self, repo, number):
+        """
+        Raise a ServerException if we should skip this PR.
+        """
+        if not self._shouldHandlePull(repo, number):
+            raise ServerException(f'Skipping {repo}#{number}.')
