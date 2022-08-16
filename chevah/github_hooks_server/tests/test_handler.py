@@ -8,7 +8,6 @@ https://github.com/chevah/github-hooks-server/pull/8
 These are very fragile as they depend on read GitHub data.
 """
 import logging
-import time
 from unittest import TestCase
 
 import github3
@@ -153,7 +152,6 @@ class TestHandler(TestCase):
         Return whether we should handle the given pull request.
         See test_config.ini for the repos skipped during testing.
         """
-        # No error.
         self.assertTrue(self.handler._shouldHandlePull('chevah/no-skip', '8'))
         self.assertTrue(self.handler._shouldHandlePull('chevah/no-skip', 8))
 
@@ -452,13 +450,23 @@ class TestHandler(TestCase):
             self.assertTrue(result)
 
 
+class StubUser:
+    """
+    A stub for a ShortUser returned by Github3.
+    """
+    def __init__(self, login):
+        self.login = login
+
+
 class TestLiveHandler(TestCase):
     """
     Tests requiring a real GitHub connection.
     """
     def setUp(self):
         super(TestLiveHandler, self).setUp()
-        self.handler = Handler(github3.login(token=github_token), config={})
+        self.handler = Handler(
+            github3.login(token=github_token), config=config
+            )
 
         self.log_asserter, self.logger = LogAsserter.createWithLogger()
 
@@ -477,7 +485,7 @@ class TestLiveHandler(TestCase):
 # --------------------- needs-review ------------------------------------------
 #
 # The creator of the PR (and review-requester) is adiroiban,
-# and the reviewers are danuker and chevah-robot.
+# and the reviewers are danuker and/or chevah-robot.
 
     def prepareToNeedReview(self):
         """
@@ -497,7 +505,9 @@ class TestLiveHandler(TestCase):
         self.assertNotIn('needs-review', initial_labels)
         self.assertEqual(['adiroiban'], [u.login for u in issue.assignees])
         # Must retrieve the requested reviewers again, in order to check them.
-        self.assertEqual([], [u.login for u in issue.pull_request().requested_reviewers])
+        self.assertEqual(
+            [], [u.login for u in issue.pull_request().requested_reviewers]
+            )
         return issue, pr
 
     def assertReviewRequested(self, from_users=None):
@@ -570,6 +580,11 @@ class TestLiveHandler(TestCase):
         actions = ['review_requested', 'ready_for_review']
 
         for action in actions:
+            requested_reviewers = []
+            if action == 'review_requested':
+                requested_reviewers = [
+                    StubUser('danuker'), StubUser('chevah-robot')]
+
             content = {
                 'action': action,
                 'pull_request': {
@@ -578,6 +593,7 @@ class TestLiveHandler(TestCase):
                     'body': 'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
                     'number': 8,
                     'user': {'login': 'adiroiban'},
+                    'requested_reviewers': requested_reviewers
                     },
                 'repository': {
                     'full_name': 'chevah/github-hooks-server',
@@ -607,6 +623,7 @@ class TestLiveHandler(TestCase):
 
         Does not automatically ask for any other review, because:
         1. the requester has the ability to request reviews
+            (because the action is `review_requested`)
         2. it is assumed the requester selected everyone they need.
 
         Does not delete pre-existing review requests (here, for danuker).
@@ -619,6 +636,7 @@ class TestLiveHandler(TestCase):
                 'body': 'bla\r\nbla',
                 'number': 8,
                 'user': {'login': 'adiroiban'},
+                'requested_reviewers': [StubUser('danuker')],
                 },
             'repository': {
                 'full_name': 'chevah/github-hooks-server',
@@ -640,7 +658,6 @@ class TestLiveHandler(TestCase):
             "reviewers=['danuker']"
             )
         self.assertReviewRequested(from_users=['danuker'])
-        raise ValueError('Test must leave already-requested reviews alone.')
 
     def test_needs_review_nonexistent_user(self):
         """
@@ -697,7 +714,6 @@ class TestLiveHandler(TestCase):
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-merge', 'low'])
         issue.edit(assignees=['chevah-robot'])
-        raise ValueError('Must also use review requests, not just assignees')
         initial_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', initial_labels)
         self.assertIn('needs-merge', initial_labels)
@@ -764,12 +780,13 @@ class TestLiveHandler(TestCase):
         content = {
             'pull_request': {
                 'title': '[#42] Some message.',
-                'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
+                'body': 'bla\r\nbla',
                 'user': {'login': 'adiroiban'},
                 'number': 8,
+                'requested_reviewers': [],
                 },
             'review': {
-                'user': {'login': 'tu'},
+                'user': {'login': 'chevah-robot'},
                 'body': 'anything here.',
                 'state': 'changes_requested',
                 },
@@ -805,8 +822,6 @@ class TestLiveHandler(TestCase):
         pr.delete_review_requests(pr.requested_reviewers)
         pr.create_review_requests(['chevah-robot'])
         issue.edit(assignees=['chevah-robot'])
-        # Wait for the already-running production running hook.
-        time.sleep(5)
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
         initial_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', initial_labels)
@@ -814,6 +829,7 @@ class TestLiveHandler(TestCase):
         self.assertIn('low', initial_labels)
         self.assertNotIn('needs-merge', initial_labels)
         self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
+        return pr
 
     def assertMergeRequested(self):
         """
@@ -835,11 +851,11 @@ class TestLiveHandler(TestCase):
         self.assertCountEqual(
             [], [u.login for u in pr.requested_reviewers])
 
-
     def test_issue_comment_approved_last(self):
         """
-        A needs-merge request is sent to PR if body contains
-        the `changes-approved` marker and the user is the last reviewer.
+        A needs-merge request is sent to PR
+        if body contains the `changes-approved` marker,
+        and the user is the last reviewer (no others in `remaining_reviewers`).
         """
         self.prepareToApproveLast()
         content = {
@@ -848,7 +864,6 @@ class TestLiveHandler(TestCase):
                 'title': '[#12] Some message r\xc9sume.',
                 'body': (
                     'r\xc9sume bla\r\n'
-                    'reviewers @chevah-robot @adiroiban\r\n'
                     'bla'
                     ),
                 'number': 8,
@@ -882,13 +897,19 @@ class TestLiveHandler(TestCase):
         When the review was approved and no other reviewers are expected,
         the PR is set into the needs-merge state.
         """
-        self.prepareToApproveLast()
+        pr = self.prepareToApproveLast()
+
+        # A user submits a review.
+        pr.delete_review_requests(['chevah-robot'])
+
+        # And GitHub sends us an API call in consequence.
         content = {
             'pull_request': {
                 'title': '[#42] Some message.',
-                'body': 'bla\r\nreviewers @chevah-robot @adiroiban\r\nbla',
+                'body': 'bla\r\nbla',
                 'number': 8,
                 'user': {'login': 'adiroiban'},
+                'requested_reviewers': [],
                 },
             'review': {
                 'user': {'login': 'chevah-robot'},
@@ -909,37 +930,41 @@ class TestLiveHandler(TestCase):
             'repo=chevah/github-hooks-server, '
             'pull_id=8, '
             'author_name=adiroiban, '
-            'reviewer_name=chevah-robot'
+            'reviewer_name=chevah-robot, '
+            "remaining_reviewers=[]"
             )
         self.assertMergeRequested()
 
 #
 # --------------------- changes-approved -> still left to review --------------
 #
-    def prepareToAproveAnLeaveForReview(self):
+    def prepareToApproveAndLeaveForReview(self):
         """
-        Set up the PR so that we can approve the changes and other reviewers
-        still need to review it.
+        Set up the PR so that we can approve the changes
+        and other reviewers still need to review it.
         """
-        raise ValueError('TODO: add review requests before the sleep.')
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
-        issue.edit(assignees=['chevah-robot', 'adiroiban'])
-        # Wait for the already-running production running hook.
-        time.sleep(5)
+        issue.edit(assignees=['chevah-robot', 'danuker'])
+
+        # Create review requests for two people.
+        pr = issue.pull_request()
+        pr.delete_review_requests(pr.requested_reviewers)
+        pr.create_review_requests(['chevah-robot', 'danuker'])
+
         initial_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', initial_labels)
         self.assertIn('needs-changes', initial_labels)
         self.assertIn('low', initial_labels)
         self.assertNotIn('needs-merge', initial_labels)
         self.assertCountEqual(
-            ['chevah-robot', 'adiroiban'], [u.login for u in issue.assignees])
+            ['chevah-robot', 'danuker'], [u.login for u in issue.assignees])
+        return pr
 
-    def assertMergeStillNeeded(self):
+    def assertReviewStillNeeded(self):
         """
-        Check that merge is still needed for the PR.
+        Check that review is still needed for the PR, after the first approval.
         """
-        raise ValueError('TODO: check review requests')
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         last_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', last_labels)
@@ -947,6 +972,9 @@ class TestLiveHandler(TestCase):
         self.assertIn('needs-changes', last_labels)
         self.assertEqual(
             ['chevah-robot'], [u.login for u in issue.assignees])
+        self.assertCountEqual(
+            ['chevah-robot'],
+            [u.login for u in issue.pull_request().requested_reviewers])
 
     def test_issue_comment_approved_still_reviewers(self):
         """
@@ -954,17 +982,17 @@ class TestLiveHandler(TestCase):
         reviewers, the PR is kept in the same state and new CC list is
         updated.
         """
-        self.prepareToAproveAnLeaveForReview()
+        self.prepareToApproveAndLeaveForReview()
         content = {
             'issue': {
                 'pull_request': {'html_url': 'something'},
                 'title': '[#12] Some message.',
-                'body': 'bla\r\nreviewers @chevah-robot @adiroiban\r\nbla',
+                'body': 'bla\r\nbla',
                 'number': 8,
                 'user': {'login': 'adiroiban'},
                 },
             'comment': {
-                'user': {'login': 'adiroiban'},
+                'user': {'login': 'danuker'},
                 'body': 'Simple words \r\n**changes-approved** magic.',
                 },
             'repository': {
@@ -981,26 +1009,34 @@ class TestLiveHandler(TestCase):
             "repo=chevah/github-hooks-server, "
             "pull_id=8, "
             "author_name=adiroiban, "
-            "reviewer_name=adiroiban, "
+            "reviewer_name=danuker, "
             "remaining_reviewers=['chevah-robot']"
             )
-        self.assertMergeStillNeeded()
+        self.assertReviewStillNeeded()
 
     def test_pull_request_review_approved_still_reviewers(self):
         """
         When the review was approved and there are other reviewers,
         the PR is left in needs-review and reviewer is removed.
         """
-        self.prepareToAproveAnLeaveForReview()
+        pr = self.prepareToApproveAndLeaveForReview()
+
+        # A user submits a review.
+        pr.delete_review_requests(['danuker'])
+
+        # And GitHub sends us an API call in consequence.
         content = {
             'pull_request': {
                 'title': '[#42] Some message.',
-                'body': 'bla\r\nreviewers @chevah-robot @adiroiban\r\nbla',
+                'body': 'bla\r\nbla',
                 'number': 8,
                 'user': {'login': 'pr-author-ignored'},
+                'requested_reviewers': [
+                    StubUser('chevah-robot')
+                    ]
                 },
             'review': {
-                'user': {'login': 'adiroiban'},
+                'user': {'login': 'danuker'},
                 'body': 'anything here.',
                 'state': 'approved',
                 },
@@ -1018,6 +1054,7 @@ class TestLiveHandler(TestCase):
             'repo=chevah/github-hooks-server, '
             'pull_id=8, '
             'author_name=pr-author-ignored, '
-            'reviewer_name=adiroiban'
+            'reviewer_name=danuker, '
+            "remaining_reviewers=['chevah-robot']"
             )
-        self.assertMergeStillNeeded()
+        self.assertReviewStillNeeded()

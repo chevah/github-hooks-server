@@ -7,7 +7,13 @@ import re
 import github3
 from github3.exceptions import UnprocessableEntity
 
-from chevah.github_hooks_server.server import ServerException
+
+class HandlerException(Exception):
+    """
+    Generic handler exception.
+    """
+    def __init__(self, message):
+        self.message = message
 
 
 class Handler(object):
@@ -65,13 +71,23 @@ class Handler(object):
         repo = event.content['repository']['full_name']
         pull_id = event.content['pull_request']['number']
         message = event.content['pull_request']['body']
+        requested_reviewers = [
+            u.login
+            for u in event.content['pull_request']['requested_reviewers']
+            ]
+        if not requested_reviewers:
+            requested_reviewers = self._getReviewers(
+                message=message,
+                repo=repo,
+                action=action,
+                )
 
         self._raiseIfShouldSkip(repo, pull_id)
 
         self._setNeedsReview(
             repo=repo,
             pull_id=pull_id,
-            reviewers=self._getReviewers(action, message, repo),
+            reviewers=requested_reviewers,
             event=event
             )
 
@@ -93,7 +109,7 @@ class Handler(object):
         author_name = event.content['pull_request']['user']['login']
         reviewer_name = event.content['review']['user']['login']
         remaining_reviewers = [
-            u['login']
+            u.login
             for u in event.content['pull_request']['requested_reviewers']
             ]
 
@@ -249,7 +265,9 @@ class Handler(object):
 
         author_name = event.content['issue']['user']['login']
 
-        reviewers = self._getReviewersFromMessage(message=event.content['issue']['body'])
+        reviewers = self._getReviewersFromMessage(
+            message=event.content['issue']['body']
+            )
 
         if self._needsReview(body):
             self._setNeedsReview(
@@ -374,7 +392,7 @@ class Handler(object):
 
     def _raiseIfShouldSkip(self, repo, number):
         """
-        Raise a ServerException if we should skip this PR.
+        Raise a HandlerException if we should skip this PR.
         """
         if not self._shouldHandlePull(repo, number):
-            raise ServerException(f'Skipping {repo}#{number}.')
+            raise HandlerException(f'Skipping {repo}#{number}.')
