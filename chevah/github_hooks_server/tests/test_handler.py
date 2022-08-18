@@ -300,11 +300,13 @@ class TestHandler(TestCase):
 
     def test_getReviewers_no(self):
         """
-        Empty list is returned if message does not contains reviewers.
+        Empty list is returned if message does not contain reviewers,
+        and no default-reviewers are configured for the given repository.
         """
         message = u'Simple message r\xc9sume\r\nSimple words.'
 
-        result = self.handler._getReviewers(message, None, 'ready_for_review')
+        result = self.handler._getReviewers(
+            message, 'some/repo', 'ready_for_review')
 
         self.assertEqual([], result)
 
@@ -333,7 +335,7 @@ class TestHandler(TestCase):
         Example: https://github.com/twisted/twisted/pull/1734
         """
         result = self.handler._getReviewers(
-            message=None, repo=None, action='ready_for_review')
+            message=None, repo='some/repo', action='ready_for_review')
 
         self.assertEqual([], result)
 
@@ -355,6 +357,31 @@ class TestHandler(TestCase):
             )
 
         self.assertEqual(['reviewer1', 'reviewer2'], result)
+
+    def test_getReviewers_default_orgwide(self):
+        """
+        When no reviewer is in the message,
+        and no default-reviewer is configured for the repo,
+        returns the configured reviewer of an organization-wide default rule.
+        """
+        result = self.handler._getReviewers(
+            message=None, repo='test_orgwide/some_repo', action='ready_for_review'
+            )
+        self.assertEqual(['reviewer3'], result)
+
+    def test_getReviewers_default_repo_when_also_orgwide(self):
+        """
+        When no reviewer is in the message,
+        and a default-reviewer is configured for both the repo and the org,
+        returns the repo-wide reviewer, because it is more specific.
+        """
+        result = self.handler._getReviewers(
+            message=None,
+            repo='test_orgwide/repo_exception',
+            action='ready_for_review'
+            )
+
+        self.assertEqual(['reviewer4'], result)
 
     def test_needsReview_false(self):
         """

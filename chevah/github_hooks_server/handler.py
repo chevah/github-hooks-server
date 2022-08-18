@@ -346,7 +346,15 @@ class Handler(object):
         Returns the list of default reviewers configured for a repo.
         If none is configured, returns empty list.
         """
-        return self._config.get('default-reviewers', {}).get(repo, [])
+        reviewers = self._config.get('default-reviewers', {}).get(repo, [])
+
+        if not reviewers:
+            # We have no default reviewers for the repository.
+            # Look for default organization reviewers.
+            org = repo.split('/')[0] + '/'
+            reviewers = self._config.get('default-reviewers', {}).get(org, [])
+
+        return reviewers
 
     def _needsChanges(self, content):
         """
