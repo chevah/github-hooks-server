@@ -405,6 +405,12 @@ class TestHandler(TestCase):
             'needs-review',
             '*needs-review*',
             '**needs-review**',
+
+            # For Twisted.
+            'please-review',
+            'review-please',
+            'please review',
+            'review please',
             ]
 
         for marker in markers:
