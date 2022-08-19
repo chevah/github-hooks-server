@@ -26,7 +26,7 @@ class Handler(object):
     RE_TRAC_TICKET_ID = r'\[#(\d+)\] .*'
     RE_REVIEWERS = r'.*reviewers{0,1}:{0,1} @.*'
     RE_NEEDS_REVIEW = r'.*needs{0,1}[\-_]review.*'
-    RE_NEEDS_REVIEW_TWISTED = r'.*(please[ -]review|review[ -]please).*'
+    RE_NEEDS_REVIEW_TWISTED = r'.*(please[ \-]review|review[ \-]please).*'
     RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
     RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
 
@@ -169,16 +169,6 @@ class Handler(object):
             issue.add_labels('needs-review')
             self._removeLabels(issue, ['needs-changes', 'needs-merge'])
             issue.pull_request().create_review_requests(reviewers)
-            try:
-                issue.edit(assignees=reviewers)
-            except UnprocessableEntity:
-                logging.error(
-                    '_setNeedsReview failed to assign %s for %s #%s. '
-                    'Emptying assignees.' % (
-                        reviewers, repo, pull_id
-                        )
-                    )
-                issue.edit(assignees=[])
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
@@ -234,9 +224,6 @@ class Handler(object):
                 issue.add_labels('needs-merge')
                 self._removeLabels(issue, ['needs-review', 'needs-changes'])
                 issue.edit(assignees=[author_name])
-            else:
-                issue.edit(assignees=remaining_reviewers)
-
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 

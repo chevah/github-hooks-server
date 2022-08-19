@@ -547,8 +547,8 @@ class TestLiveHandler(TestCase):
         """
         Check that the review was requested for the PR.
 
-        Label is needs-review, reviewers are set as assignees,
-        and a review is requested from them.
+        Label is needs-review, and review requests are created.
+        The assignees are left alone.
         """
         if from_users is None:
             from_users = ['danuker', 'chevah-robot']
@@ -558,7 +558,7 @@ class TestLiveHandler(TestCase):
         self.assertIn('low', last_labels)
         self.assertNotIn('needs-changes', last_labels)
         self.assertNotIn('needs-merge', last_labels)
-        self.assertCountEqual(from_users, [u.login for u in issue.assignees])
+        self.assertEqual(['adiroiban'], [u.login for u in issue.assignees])
         self.assertCountEqual(
             from_users,
             [u.login for u in issue.pull_request().requested_reviewers])
@@ -694,7 +694,7 @@ class TestLiveHandler(TestCase):
 
     def test_needs_review_nonexistent_user(self):
         """
-        When a reviewer can not be assigned or asked to review,
+        When a reviewer can not be asked to review,
         the labels are still set.
         """
         body = u'One more r\xc9sume\r\n\r\n**needs-review**\r\n'
@@ -726,12 +726,6 @@ class TestLiveHandler(TestCase):
             "repo=chevah/github-hooks-server, "
             "pull_id=8, "
             "reviewers=['nonexistent_user']"
-            )
-
-        self.assertLog(
-            "_setNeedsReview failed to assign ['nonexistent_user'] "
-            "for chevah/github-hooks-server #8. "
-            "Emptying assignees."
             )
         self.assertReviewRequested(from_users=[])
 
@@ -854,14 +848,14 @@ class TestLiveHandler(TestCase):
         pr = issue.pull_request()
         pr.delete_review_requests(pr.requested_reviewers)
         pr.create_review_requests(['chevah-robot'])
-        issue.edit(assignees=['chevah-robot'])
+        issue.edit(assignees=['adiroiban'])
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
         initial_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', initial_labels)
         self.assertIn('needs-changes', initial_labels)
         self.assertIn('low', initial_labels)
         self.assertNotIn('needs-merge', initial_labels)
-        self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
+        self.assertEqual(['adiroiban'], [u.login for u in issue.assignees])
         return pr
 
     def assertMergeRequested(self):
@@ -978,7 +972,7 @@ class TestLiveHandler(TestCase):
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
-        issue.edit(assignees=['chevah-robot', 'danuker'])
+        issue.edit(assignees=['adiroiban'])
 
         # Create review requests for two people.
         pr = issue.pull_request()
@@ -991,12 +985,13 @@ class TestLiveHandler(TestCase):
         self.assertIn('low', initial_labels)
         self.assertNotIn('needs-merge', initial_labels)
         self.assertCountEqual(
-            ['chevah-robot', 'danuker'], [u.login for u in issue.assignees])
+            ['adiroiban'], [u.login for u in pr.assignees])
         return pr
 
     def assertReviewStillNeeded(self):
         """
         Check that review is still needed for the PR, after the first approval.
+        The assignees are left alone.
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         last_labels = [l.name for l in issue.labels()]
@@ -1004,7 +999,7 @@ class TestLiveHandler(TestCase):
         self.assertIn('low', last_labels)
         self.assertIn('needs-changes', last_labels)
         self.assertEqual(
-            ['chevah-robot'], [u.login for u in issue.assignees])
+            ['adiroiban'], [u.login for u in issue.assignees])
         self.assertCountEqual(
             ['chevah-robot'],
             [u.login for u in issue.pull_request().requested_reviewers])
