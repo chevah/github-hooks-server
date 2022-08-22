@@ -25,8 +25,12 @@ class Handler(object):
 
     RE_TRAC_TICKET_ID = r'\[#(\d+)\] .*'
     RE_REVIEWERS = r'.*reviewers{0,1}:{0,1} @.*'
-    RE_NEEDS_REVIEW = r'.*needs{0,1}[\-_]review.*'
-    RE_NEEDS_REVIEW_TWISTED = r'.*(please[ \-]review|review[ \-]please).*'
+    RE_NEEDS_REVIEW = (
+        r'.*'
+        r'((needs{0,1}[\-_]|please[ \-])review)|'
+        r'(review[ \-]please)'
+        r'.*'
+        )
     RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
     RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
 
@@ -360,8 +364,6 @@ class Handler(object):
         """
         for line in content.splitlines():
             if re.match(self.RE_NEEDS_REVIEW, line):
-                return True
-            if re.match(self.RE_NEEDS_REVIEW_TWISTED, line):
                 return True
         return False
 
