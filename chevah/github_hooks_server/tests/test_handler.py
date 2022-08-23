@@ -281,7 +281,8 @@ class TestHandler(TestCase):
                 'body': 'bla\r\nreviewers @tu @adiroiban\r\nbla',
                 'user': {'login': 'adiroiban'},
                 'number': 8,
-                'requested_reviewers': []
+                'requested_reviewers': [],
+                'requested_teams': [],
                 },
             'review': {
                 'user': {'login': 'tu'},
@@ -382,6 +383,19 @@ class TestHandler(TestCase):
             )
 
         self.assertEqual(['reviewer4'], result)
+
+    def test_splitReviewers(self):
+        """
+        Splits reviewers in individuals and teams, as a dictionary.
+        Teams are stripped of the repository prefix and slash.
+        """
+        self.assertEqual(
+            {
+                'reviewers': ['account'],
+                'team_reviewers': ['team'],
+            },
+            self.handler._splitReviewers(['account', 'chevah/team'])
+            )
 
     def test_needsReview_false(self):
         """
@@ -491,6 +505,16 @@ class StubUser:
         self.login = login
 
 
+class StubTeam:
+    """
+    A stub for a ShortTeam returned by Github3.
+    """
+    def __init__(self, slug):
+        if "/" in slug:
+            raise ValueError("Team slug must not contain organization.")
+        self.slug = slug
+
+
 class TestLiveHandler(TestCase):
     """
     Tests requiring a real GitHub connection.
@@ -530,7 +554,10 @@ class TestLiveHandler(TestCase):
         issue.replace_labels(['needs-changes', 'needs-merge', 'low'])
         issue.edit(assignees=['adiroiban'])
         pr = issue.pull_request()
-        pr.delete_review_requests(pr.requested_reviewers)
+        pr.delete_review_requests(
+            reviewers=pr.requested_reviewers,
+            team_reviewers=pr.requested_teams,
+            )
         initial_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-changes', initial_labels)
         self.assertIn('needs-merge', initial_labels)
@@ -543,15 +570,21 @@ class TestLiveHandler(TestCase):
             )
         return issue, pr
 
-    def assertReviewRequested(self, from_users=None):
+    def assertReviewRequested(self, from_users=None, from_teams=None):
         """
         Check that the review was requested for the PR.
 
         Label is needs-review, and review requests are created.
         The assignees are left alone.
+
+        `from_teams` contains just the slugs of the teams,
+        without the organization.
+        Example: ["the-b-team"], not ["chevah/the-b-team"].
         """
         if from_users is None:
             from_users = ['danuker', 'chevah-robot']
+        if from_teams is None:
+            from_teams = []
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         last_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', last_labels)
@@ -562,10 +595,13 @@ class TestLiveHandler(TestCase):
         self.assertCountEqual(
             from_users,
             [u.login for u in issue.pull_request().requested_reviewers])
+        self.assertCountEqual(
+            from_teams,
+            [t.slug for t in issue.pull_request().requested_teams])
 
     def test_issue_comment_needs_review(self):
         """
-        A needs review request is sent to a PR if body contains
+        A needs review request is sent to a PR if comment body contains
         **needs-review** marker and other review labels are removed.
         """
         body = u'One more r\xc9sume\r\n\r\n**needs-review**\r\n'
@@ -600,6 +636,48 @@ class TestLiveHandler(TestCase):
             )
         self.assertReviewRequested()
 
+    def test_issue_comment_needs_review_team(self):
+        """
+        Sets "needs-review" label and assigns the team for review,
+        when a review is asked for, via a comment.
+
+        The team is requested because the default reviewer is configured to be
+        the team in `tests/test_config.ini`.
+        """
+        # issue.pull_request().create_review_requests(reviewers=['the-b-team']) -> UnprocessableEntity 422 -> try next line:
+        # issue.pull_request().create_review_requests(team_reviewers=['the-b-team'])
+
+        body = u'One more r\xc9sume\r\n\r\n**needs-review**\r\n'
+        content = {
+            u'issue': {
+                u'pull_request': {u'html_url': u'something'},
+                u'title': u'[#12] Some message.',
+                u'body': u'bla\r\nbla',
+                'number': 8,
+                'user': {'login': 'adiroiban'},
+                },
+            u'comment': {
+                u'user': {u'login': 'somebody'},
+                u'body': body,
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+
+        self.prepareToNeedReview()
+        event = Event(name='issue_comment', content=content)
+        self.handler.dispatch(event)
+
+        self.assertLog(
+            "_setNeedsReview "
+            "event=issue_comment, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "reviewers=['chevah/the-b-team']"
+            )
+        self.assertReviewRequested(from_users=[], from_teams=['the-b-team'])
+
     def test_review_requested_needs_review(self):
         """
         When a review is requested from someone,
@@ -626,7 +704,7 @@ class TestLiveHandler(TestCase):
                     'body': 'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
                     'number': 8,
                     'user': {'login': 'adiroiban'},
-                    'requested_reviewers': requested_reviewers
+                    'requested_reviewers': requested_reviewers,
                     },
                 'repository': {
                     'full_name': 'chevah/github-hooks-server',
@@ -732,12 +810,17 @@ class TestLiveHandler(TestCase):
 #
 # --------------------- needs-changes -----------------------------------------
 #
-    def prepareToRequestChanges(self):
+    def prepareToRequestChanges(self, from_reviewers=None, from_teams=None):
         """
         Set up the PR so that we can request changes.
 
         PR doesn't have the author as assignee and has the needs-review label.
         """
+        if from_reviewers is None:
+            from_reviewers = ['chevah-robot']
+        if from_teams is None:
+            from_teams = ['the-b-team']
+
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         issue.replace_labels(['needs-review', 'needs-merge', 'low'])
         issue.edit(assignees=['chevah-robot'])
@@ -747,12 +830,16 @@ class TestLiveHandler(TestCase):
         self.assertIn('low', initial_labels)
         self.assertNotIn('needs-changes', initial_labels)
         self.assertEqual(['chevah-robot'], [u.login for u in issue.assignees])
+        issue.pull_request().create_review_requests(
+            reviewers=from_reviewers, team_reviewers=from_teams
+            )
 
     def assertChangesRequested(self):
         """
         Check that the request changes was done for PR.
 
         Label is needs-changes and author is set at assignee.
+        Review requests are emptied.
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         last_labels = [l.name for l in issue.labels()]
@@ -762,6 +849,8 @@ class TestLiveHandler(TestCase):
         self.assertNotIn('needs-merge', last_labels)
         self.assertCountEqual(
             ['adiroiban'], [u.login for u in issue.assignees])
+        self.assertCountEqual([], issue.pull_request().requested_reviewers)
+        self.assertCountEqual([], issue.pull_request().requested_teams)
 
     def test_issue_comment_request_changes(self):
         """
@@ -811,6 +900,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 'number': 8,
                 'requested_reviewers': [],
+                'requested_teams': [],
                 },
             'review': {
                 'user': {'login': 'chevah-robot'},
@@ -846,7 +936,10 @@ class TestLiveHandler(TestCase):
         """
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         pr = issue.pull_request()
-        pr.delete_review_requests(pr.requested_reviewers)
+        pr.delete_review_requests(
+            reviewers=pr.requested_reviewers,
+            team_reviewers=pr.requested_teams,
+            )
         pr.create_review_requests(['chevah-robot'])
         issue.edit(assignees=['adiroiban'])
         issue.replace_labels(['needs-review', 'needs-changes', 'low'])
@@ -937,6 +1030,7 @@ class TestLiveHandler(TestCase):
                 'number': 8,
                 'user': {'login': 'adiroiban'},
                 'requested_reviewers': [],
+                'requested_teams': [],
                 },
             'review': {
                 'user': {'login': 'chevah-robot'},
@@ -976,7 +1070,10 @@ class TestLiveHandler(TestCase):
 
         # Create review requests for two people.
         pr = issue.pull_request()
-        pr.delete_review_requests(pr.requested_reviewers)
+        pr.delete_review_requests(
+            reviewers=pr.requested_reviewers,
+            team_reviewers=pr.requested_teams,
+            )
         pr.create_review_requests(['chevah-robot', 'danuker'])
 
         initial_labels = [l.name for l in issue.labels()]
@@ -988,11 +1085,19 @@ class TestLiveHandler(TestCase):
             ['adiroiban'], [u.login for u in pr.assignees])
         return pr
 
-    def assertReviewStillNeeded(self):
+    def assertReviewStillNeeded(self, from_users=None, from_teams=None):
         """
         Check that review is still needed for the PR, after the first approval.
         The assignees are left alone.
+
+        `from_teams` contains just the slugs of the teams,
+        without the organization.
+        Example: ["the-b-team"], not ["chevah/the-b-team"].
         """
+        if from_users is None:
+            from_users = ['chevah-robot']
+        if from_teams is None:
+            from_teams = []
         issue = self.handler._github.issue('chevah', 'github-hooks-server', 8)
         last_labels = [l.name for l in issue.labels()]
         self.assertIn('needs-review', last_labels)
@@ -1001,14 +1106,16 @@ class TestLiveHandler(TestCase):
         self.assertEqual(
             ['adiroiban'], [u.login for u in issue.assignees])
         self.assertCountEqual(
-            ['chevah-robot'],
+            from_users,
             [u.login for u in issue.pull_request().requested_reviewers])
+        self.assertCountEqual(
+            from_teams,
+            [t.slug for t in issue.pull_request().requested_teams])
 
     def test_issue_comment_approved_still_reviewers(self):
         """
         When body contains the `changes-approved` marker and there are still
-        reviewers, the PR is kept in the same state and new CC list is
-        updated.
+        reviewers, the PR is kept in the same state.
         """
         self.prepareToApproveAndLeaveForReview()
         content = {
@@ -1042,6 +1149,54 @@ class TestLiveHandler(TestCase):
             )
         self.assertReviewStillNeeded()
 
+    def test_issue_comment_approved_still_reviewers_team(self):
+        """
+        When body contains the `changes-approved` marker
+        and there are still team reviewers requested,
+        the PR is kept in the same state.
+        """
+        pr = self.prepareToApproveAndLeaveForReview()
+
+        # A team review is requested.
+        pr.create_review_requests(team_reviewers=['the-b-team'])
+
+        # The users submitted reviews. Only the team remains.
+        pr.delete_review_requests(['danuker', 'chevah-robot'])
+
+        # And GitHub sends us an API call in consequence.
+        content = {
+            'pull_request': {
+                'title': '[#42] Some message.',
+                'body': 'bla\r\nbla',
+                'number': 8,
+                'user': {'login': 'pr-author-ignored'},
+                'requested_reviewers': [],
+                'requested_teams': [StubTeam('the-b-team')]
+                },
+            'review': {
+                'user': {'login': 'danuker'},
+                'body': 'anything here.',
+                'state': 'approved',
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+        event = Event(name='pull_request_review', content=content)
+
+        self.handler.dispatch(event)
+
+        self.assertLog(
+            '_setApproveChanges '
+            'event=pull_request_review, '
+            'repo=chevah/github-hooks-server, '
+            'pull_id=8, '
+            'author_name=pr-author-ignored, '
+            'reviewer_name=danuker, '
+            "remaining_reviewers=['chevah/the-b-team']"
+            )
+        self.assertReviewStillNeeded(from_users=[], from_teams=['the-b-team'])
+
     def test_pull_request_review_approved_still_reviewers(self):
         """
         When the review was approved and there are other reviewers,
@@ -1059,9 +1214,8 @@ class TestLiveHandler(TestCase):
                 'body': 'bla\r\nbla',
                 'number': 8,
                 'user': {'login': 'pr-author-ignored'},
-                'requested_reviewers': [
-                    StubUser('chevah-robot')
-                    ]
+                'requested_reviewers': [StubUser('chevah-robot')],
+                'requested_teams': [],
                 },
             'review': {
                 'user': {'login': 'danuker'},

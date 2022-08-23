@@ -5,7 +5,6 @@ import logging
 import re
 
 import github3
-from github3.exceptions import UnprocessableEntity
 
 
 class HandlerException(Exception):
@@ -117,6 +116,11 @@ class Handler(object):
             u.login
             for u in event.content['pull_request']['requested_reviewers']
             ]
+        org = repo.split('/')[0]
+        remaining_reviewers += [
+            f'{org}/{team.slug}'
+            for team in event.content['pull_request']['requested_teams']
+            ]
 
         self._raiseIfShouldSkip(repo, pull_id)
 
@@ -172,7 +176,9 @@ class Handler(object):
         if issue:
             issue.add_labels('needs-review')
             self._removeLabels(issue, ['needs-changes', 'needs-merge'])
-            issue.pull_request().create_review_requests(reviewers)
+            issue.pull_request().create_review_requests(
+                **self._splitReviewers(reviewers)
+                )
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
@@ -194,7 +200,10 @@ class Handler(object):
             issue.add_labels('needs-changes')
             self._removeLabels(issue, ['needs-review', 'needs-merge'])
             pr = issue.pull_request()
-            pr.delete_review_requests(pr.requested_reviewers)
+            pr.delete_review_requests(
+                reviewers=pr.requested_reviewers,
+                team_reviewers=pr.requested_teams
+                )
             issue.edit(assignees=[author_name])
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
@@ -253,12 +262,13 @@ class Handler(object):
         self._raiseIfShouldSkip(repo, pull_id)
 
         body = event.content['comment']['body']
-        reviewer_name = event.content['comment']['user']['login']
+        commenter_name = event.content['comment']['user']['login']
 
         author_name = event.content['issue']['user']['login']
-
-        reviewers = self._getReviewersFromMessage(
-            message=event.content['issue']['body']
+        reviewers = self._getReviewers(
+            message=event.content['issue']['body'],
+            repo=repo,
+            action='issue_comment',
             )
 
         if self._needsReview(body):
@@ -280,21 +290,21 @@ class Handler(object):
             # without creating a GitHub review.
             username, repository = repo.split('/', 1)
             pull = self._github.pull_request(username, repository, pull_id)
-            pull.delete_review_requests([reviewer_name])
+            pull.delete_review_requests([commenter_name])
 
             # The PR model does not update the `requested_reviewers`
             # after deleting the review request,
             # so we have to manually remove it.
             remaining_reviewers = list(
                 set(u.login for u in pull.requested_reviewers) -
-                {reviewer_name}
+                {commenter_name}
                 )
 
             self._setApproveChanges(
                 repo=repo,
                 pull_id=pull_id,
                 author_name=author_name,
-                reviewer_name=reviewer_name,
+                reviewer_name=commenter_name,
                 remaining_reviewers=remaining_reviewers,
                 event=event,
                 )
@@ -307,7 +317,9 @@ class Handler(object):
         and did not specify reviewers in the PR description,
         do not request any other reviews.
 
-        Possible actions are specified in the `pull_request` method.
+        Possible actions are:
+          - "ready_for_review" or "review_requested" from a pull_request.
+          - "issue_comment" from a comment.
         """
         reviewers = self._getReviewersFromMessage(message)
 
@@ -395,3 +407,17 @@ class Handler(object):
         """
         if not self._shouldHandlePull(repo, number):
             raise HandlerException(f'Skipping {repo}#{number}.')
+
+    def _splitReviewers(self, reviewers):
+        """
+        Split a list of reviewers into a dict of two key-value pairs,
+        one with individual account logins, the other with team slugs.
+        """
+        accounts = []
+        teams = []
+        for reviewer in reviewers:
+            if '/' in reviewer:
+                teams.append(reviewer.split('/')[-1])
+                continue
+            accounts.append(reviewer)
+        return {'reviewers': accounts, 'team_reviewers': teams}
