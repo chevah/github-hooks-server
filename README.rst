@@ -73,51 +73,25 @@ Deployment
 
 Make sure `config.ini` has an appropriate `github-token` value.
 
-To deploy to Azure Functions::
+We can not deploy using Serverless on Azure Functions anymore.
+The upload of the package succeeds, but updating the Function App does not.
 
-    serverless deploy
+Therefore, we have to deploy using Azure CLI and Azure Functions Core Tools.
+Serverless is still used, because it generates the proper package.
 
-
-Refer to
-`Serverless Azure docs
-<https://serverless.com/framework/docs/providers/azure/guide/intro/>`_
-for more information.
-
-To inspect a package before deploying
-(such as for checking whether large useless files are included),
-build a package and inspect it before deploying::
-
-    serverless package
-
-
-Troubleshooting
-===============
-
-If you get an `Error: EISDIR: illegal operation on a directory, read` during
-deployment, it worked to run `npm install` and try deployment again.
-
-If you get an `Error: Entry not found in cache.` right after
-`Serverless: Creating resource group: sls-weur-dev-githubhooks-rg`,
-remove `~/.azure/slsTokenCache.json` to forget the login tokens and try again
-(which will prompt a re-login).
-See `here <https://github.com/serverless/serverless-azure-functions/issues/412>`_
-for details.
-
-If you keep seeing `Function App not ready. Retry XX of 30...`,
-check out the "Diagnose and solve problems" feature of
-`the Azure Function App management tool
-<https://portal.azure.com/#blade/HubsExtension/BrowseResource/resourceType/Microsoft.Web%2Fsites/kind/functionapp>`_.
-For example, the name can be longer than 32 characters,
-leading to truncation and collisions.
-
-If that doesn't work, try to install
+Install
 `Azure CLI <https://github.com/Azure/azure-cli>`_ and
 `Azure Functions Core Tools
 <https://github.com/Azure/azure-functions-core-tools>`_.
 
+Also install `pip_tools` (via `pip`) for `pip-compile`,
+to generate hashes for `requirements.txt`, as a workaround to
+a `poetry issue <https://github.com/python-poetry/poetry/issues/2060#issuecomment-623737835>`_.
+
 Then::
 
     poetry export -f requirements.txt --output requirements.txt
+    pip-compile --generate-hashes -o requirements.txt requirements.txt
     # Poetry won't pin setuptools, but Azure wants it to prevent tampering.
     echo 'setuptools==59.6.0 --hash=sha256:4ce92f1e1f8f01233ee9952c04f6b81d1e02939d6e1b488428154974a4d0783e' >> requirements.txt
     serverless package
