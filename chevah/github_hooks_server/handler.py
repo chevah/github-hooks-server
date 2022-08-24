@@ -6,6 +6,8 @@ import re
 
 import github3
 
+logging.Logger.root.level = 10
+
 
 class HandlerException(Exception):
     """
@@ -394,7 +396,6 @@ class Handler(object):
         Return True if we should handle this pull request.
         """
         repos = self._config['skip'].split(',')
-        print(repos)
         if repo in repos:
             return False
         if f'{repo}#{number}' in repos:

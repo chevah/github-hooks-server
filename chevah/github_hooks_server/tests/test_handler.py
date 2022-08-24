@@ -644,8 +644,6 @@ class TestLiveHandler(TestCase):
         The team is requested because the default reviewer is configured to be
         the team in `tests/test_config.ini`.
         """
-        # issue.pull_request().create_review_requests(reviewers=['the-b-team']) -> UnprocessableEntity 422 -> try next line:
-        # issue.pull_request().create_review_requests(team_reviewers=['the-b-team'])
 
         body = u'One more r\xc9sume\r\n\r\n**needs-review**\r\n'
         content = {
