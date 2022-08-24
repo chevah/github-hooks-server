@@ -6,8 +6,6 @@ import re
 
 import github3
 
-logging.Logger.root.level = 10
-
 
 class HandlerException(Exception):
     """
@@ -178,9 +176,8 @@ class Handler(object):
         if issue:
             issue.add_labels('needs-review')
             self._removeLabels(issue, ['needs-changes', 'needs-merge'])
-            issue.pull_request().create_review_requests(
-                **self._splitReviewers(reviewers)
-                )
+            requests = self._splitReviewers(reviewers)
+            issue.pull_request().create_review_requests(**requests)
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 

@@ -755,13 +755,13 @@ class TestLiveHandler(TestCase):
         issue, stale_pr = self.prepareToNeedReview()
         stale_pr.create_review_requests(['danuker'])
 
-        event = Event(name='pull_request', content=content)
+        event = Event(name='issue_comment', content=content)
 
         self.handler.dispatch(event)
 
         self.assertLog(
             "_setNeedsReview "
-            "event=pull_request, "
+            "event=issue_comment, "
             "repo=chevah/github-hooks-server, "
             "pull_id=8, "
             "reviewers=['danuker']"
