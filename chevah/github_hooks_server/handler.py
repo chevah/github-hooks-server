@@ -142,10 +142,23 @@ class Handler(object):
                 author_name=author_name,
                 event=event,
                 )
+        elif state == 'commented':
+            # Check if there is a command in the comment.
+            body = event.content['review']['body']
+            reviewers = self._getReviewers(
+                message=event.content['pull_request']['body'],
+                repo=repo,
+                action='pull_request_review',
+                )
+            if self._needsReview(body):
+                self._setNeedsReview(
+                    repo=repo, pull_id=pull_id, reviewers=reviewers,
+                    event=event
+                    )
         else:
-            # Just a simple comment.
-            # Do nothing
-            return
+            # Unrecognized state.
+            raise HandlerException(
+                f'Unknown state {state} for PR review #{pull_id}.')
 
     def _removeLabels(self, issue, labels):
         """
@@ -374,7 +387,7 @@ class Handler(object):
         Return True if content has the needs-review marker.
         """
         for line in content.splitlines():
-            if re.match(self.RE_NEEDS_REVIEW, line):
+            if re.match(self.RE_NEEDS_REVIEW, line, re.IGNORECASE):
                 return True
         return False
 

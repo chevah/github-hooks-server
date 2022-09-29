@@ -123,6 +123,12 @@ class TestLogAsserter(TestCase):
         # The log is again asserted to be empty during tearDown().
 
 
+class NotAGithub3Instance:
+    """
+    A trap GitHub instance that fails if used in tests that should be offline.
+    """
+
+
 class TestHandler(TestCase):
     """
     Tests for push handler.
@@ -132,7 +138,7 @@ class TestHandler(TestCase):
 
     def setUp(self):
         super(TestHandler, self).setUp()
-        self.handler = Handler('not a github3 instance', config=config)
+        self.handler = Handler(NotAGithub3Instance, config=config)
 
         self.log_asserter, self.logger = LogAsserter.createWithLogger()
 
@@ -425,6 +431,10 @@ class TestHandler(TestCase):
             'review-please',
             'please review',
             'review please',
+            'PLEASE-REVIEW',
+            'REVIEW-PLEASE',
+            'Please review',
+            'REVIEW PLEASE',
             ]
 
         for marker in markers:
@@ -804,6 +814,45 @@ class TestLiveHandler(TestCase):
             "reviewers=['nonexistent_user']"
             )
         self.assertReviewRequested(from_users=[])
+
+    def test_pull_request_review_comment_asking_for_review(self):
+        """
+        Labels and reviewers are set
+        when a review is requested via a PR review comment.
+        """
+        body = u'Please review this PR.'
+        content = {
+            'pull_request': {
+                'title': '[#42] Some message.',
+                u'body': u'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
+                'number': 8,
+                'user': {'login': 'adiroiban'},
+                'requested_reviewers': [],
+                'requested_teams': [],
+                },
+            'review': {
+                'user': {'login': 'adiroiban'},
+                'body': body,
+                'state': 'commented',
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+
+        self.prepareToNeedReview()
+        event = Event(name='pull_request_review', content=content)
+
+        self.handler.dispatch(event)
+
+        self.assertLog(
+            "_setNeedsReview "
+            "event=pull_request_review, "
+            "repo=chevah/github-hooks-server, "
+            "pull_id=8, "
+            "reviewers=['danuker', 'chevah-robot']"
+            )
+        self.assertReviewRequested()
 
 #
 # --------------------- needs-changes -----------------------------------------
