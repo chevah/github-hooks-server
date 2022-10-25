@@ -7,6 +7,24 @@ import re
 import github3
 
 
+class HandlerException(Exception):
+    """
+    Generic handler exception.
+    """
+    def __init__(self, message):
+        self.message = message
+
+
+def get_login(user_or_dict):
+    """
+    Sometimes, github3 parses the requested_reviewers dictionary,
+    other times it does not. Therefore, we need the special case.
+    """
+    if hasattr(user_or_dict, 'login'):
+        return user_or_dict.login
+    return user_or_dict['login']
+
+
 class Handler(object):
     """
     Handles github hooks.
@@ -16,12 +34,18 @@ class Handler(object):
 
     RE_TRAC_TICKET_ID = r'\[#(\d+)\] .*'
     RE_REVIEWERS = r'.*reviewers{0,1}:{0,1} @.*'
-    RE_NEEDS_REVIEW = r'.*needs{0,1}[\-_]review.*'
+    RE_NEEDS_REVIEW = (
+        r'.*'
+        r'((needs{0,1}[\-_]|please[ \-])review)|'
+        r'(review[ \-]please)'
+        r'.*'
+        )
     RE_NEEDS_CHANGES = r'.*needs{0,1}[\-_]changes{0,1}.*'
     RE_APPROVED = r'.*(changes{0,1}[\-_]approved{0,1})|(approved-at).*'
 
-    def __init__(self, github):
+    def __init__(self, github, config):
         self._github = github
+        self._config = config
         if not self._github:
             raise RuntimeError('Failed to init GitHub.')
 
@@ -60,10 +84,25 @@ class Handler(object):
 
         repo = event.content['repository']['full_name']
         pull_id = event.content['pull_request']['number']
-        reviewers = self._getReviewers(event.content['pull_request']['body'])
+        message = event.content['pull_request']['body']
+        requested_reviewers = [
+            u.login
+            for u in event.content['pull_request']['requested_reviewers']
+            ]
+        if not requested_reviewers:
+            requested_reviewers = self._getReviewers(
+                message=message,
+                repo=repo,
+                action=action,
+                )
+
+        self._raiseIfShouldSkip(repo, pull_id)
 
         self._setNeedsReview(
-            repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
+            repo=repo,
+            pull_id=pull_id,
+            reviewers=requested_reviewers,
+            event=event
             )
 
     def pull_request_review(self, event):
@@ -83,6 +122,17 @@ class Handler(object):
         pull_id = event.content['pull_request']['number']
         author_name = event.content['pull_request']['user']['login']
         reviewer_name = event.content['review']['user']['login']
+        remaining_reviewers = [
+            get_login(u)
+            for u in event.content['pull_request']['requested_reviewers']
+            ]
+        org = repo.split('/')[0]
+        remaining_reviewers += [
+            f'{org}/{team.slug}'
+            for team in event.content['pull_request']['requested_teams']
+            ]
+
+        self._raiseIfShouldSkip(repo, pull_id)
 
         if state == 'approved':
             # An approved review comment.
@@ -91,6 +141,7 @@ class Handler(object):
                 pull_id=pull_id,
                 author_name=author_name,
                 reviewer_name=reviewer_name,
+                remaining_reviewers=remaining_reviewers,
                 event=event,
                 )
         elif state == 'changes_requested':
@@ -101,10 +152,23 @@ class Handler(object):
                 author_name=author_name,
                 event=event,
                 )
+        elif state == 'commented':
+            # Check if there is a command in the comment.
+            body = event.content['review']['body']
+            reviewers = self._getReviewers(
+                message=event.content['pull_request']['body'],
+                repo=repo,
+                action='pull_request_review',
+                )
+            if self._needsReview(body):
+                self._setNeedsReview(
+                    repo=repo, pull_id=pull_id, reviewers=reviewers,
+                    event=event
+                    )
         else:
-            # Just a simple comment.
-            # Do nothing
-            return
+            # Unrecognized state.
+            raise HandlerException(
+                f'Unknown state {state} for PR review #{pull_id}.')
 
     def _removeLabels(self, issue, labels):
         """
@@ -135,7 +199,8 @@ class Handler(object):
         if issue:
             issue.add_labels('needs-review')
             self._removeLabels(issue, ['needs-changes', 'needs-merge'])
-            issue.edit(assignees=reviewers)
+            requests = self._splitReviewers(reviewers)
+            issue.pull_request().create_review_requests(**requests)
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
@@ -156,12 +221,23 @@ class Handler(object):
         if issue:
             issue.add_labels('needs-changes')
             self._removeLabels(issue, ['needs-review', 'needs-merge'])
+            pr = issue.pull_request()
+            pr.delete_review_requests(
+                reviewers=pr.requested_reviewers,
+                team_reviewers=pr.requested_teams
+                )
             issue.edit(assignees=[author_name])
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
     def _setApproveChanges(
-            self, repo, pull_id, author_name, reviewer_name, event):
+            self,
+            repo,
+            pull_id,
+            author_name,
+            reviewer_name,
+            remaining_reviewers,
+            event):
         """
         Update the PR with `pull_id` as approved.
         """
@@ -171,24 +247,18 @@ class Handler(object):
             f'repo={repo}, '
             f'pull_id={pull_id}, '
             f'author_name={author_name}, '
-            f'reviewer_name={reviewer_name}'
+            f'reviewer_name={reviewer_name}, '
+            f'remaining_reviewers={remaining_reviewers}'
             )
 
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, pull_id)
-
         if issue:
-            current_reviewers = {u.login for u in issue.assignees}
-            remaining_reviewers = current_reviewers - {reviewer_name}
-
             if not remaining_reviewers:
                 # All reviewers done
                 issue.add_labels('needs-merge')
                 self._removeLabels(issue, ['needs-review', 'needs-changes'])
                 issue.edit(assignees=[author_name])
-            else:
-                issue.edit(assignees=list(remaining_reviewers))
-
         else:
             logging.error('Failed to get PR %s for %s' % (pull_id, repo))
 
@@ -211,12 +281,17 @@ class Handler(object):
         repo = event.content['repository']['full_name']
         pull_id = event.content['issue']['number']
 
+        self._raiseIfShouldSkip(repo, pull_id)
+
         body = event.content['comment']['body']
-        reviewer_name = event.content['comment']['user']['login']
+        commenter_name = event.content['comment']['user']['login']
 
         author_name = event.content['issue']['user']['login']
-
-        reviewers = self._getReviewers(event.content['issue']['body'])
+        reviewers = self._getReviewers(
+            message=event.content['issue']['body'],
+            repo=repo,
+            action='issue_comment',
+            )
 
         if self._needsReview(body):
             self._setNeedsReview(
@@ -232,19 +307,57 @@ class Handler(object):
                 )
 
         elif self._changesApproved(body):
+            # We only need to delete the review request
+            # when the reviewer made a "regular" comment,
+            # without creating a GitHub review.
+            username, repository = repo.split('/', 1)
+            pull = self._github.pull_request(username, repository, pull_id)
+            pull.delete_review_requests([commenter_name])
+
+            # The PR model does not update the `requested_reviewers`
+            # after deleting the review request,
+            # so we have to manually remove it.
+            remaining_reviewers = list(
+                set(u.login for u in pull.requested_reviewers) -
+                {commenter_name}
+                )
+
             self._setApproveChanges(
                 repo=repo,
                 pull_id=pull_id,
                 author_name=author_name,
-                reviewer_name=reviewer_name,
+                reviewer_name=commenter_name,
+                remaining_reviewers=remaining_reviewers,
                 event=event,
                 )
 
-    def _getReviewers(self, message):
+    def _getReviewers(self, message, repo, action):
         """
-        Return the list of reviewers as GitHub names.
+        Identifies the accounts to request reviews from.
+
+        If a user manually requested a review ('review_requested' action),
+        and did not specify reviewers in the PR description,
+        do not request any other reviews.
+
+        Possible actions are:
+          - "ready_for_review" or "review_requested" from a pull_request.
+          - "issue_comment" from a comment.
+        """
+        reviewers = self._getReviewersFromMessage(message)
+
+        if not reviewers and action != 'review_requested':
+            reviewers = self._getDefaultReviewers(repo=repo)
+        return reviewers
+
+    def _getReviewersFromMessage(self, message):
+        """
+        Return the list of reviewers mentioned in the given text message
+        (a PR description).
         """
         results = []
+        if not message:
+            return results
+
         for line in message.splitlines():
             result = re.match(self.RE_REVIEWERS, line)
             if not result:
@@ -253,6 +366,21 @@ class Handler(object):
                 if word.startswith('@'):
                     results.append(word[1:].strip())
         return results
+
+    def _getDefaultReviewers(self, repo):
+        """
+        Returns the list of default reviewers configured for a repo.
+        If none is configured, returns empty list.
+        """
+        reviewers = self._config.get('default-reviewers', {}).get(repo, [])
+
+        if not reviewers:
+            # We have no default reviewers for the repository.
+            # Look for default organization reviewers.
+            org = repo.split('/')[0] + '/'
+            reviewers = self._config.get('default-reviewers', {}).get(org, [])
+
+        return reviewers
 
     def _needsChanges(self, content):
         """
@@ -269,8 +397,7 @@ class Handler(object):
         Return True if content has the needs-review marker.
         """
         for line in content.splitlines():
-            result = re.match(self.RE_NEEDS_REVIEW, line)
-            if result:
+            if re.match(self.RE_NEEDS_REVIEW, line, re.IGNORECASE):
                 return True
         return False
 
@@ -284,18 +411,34 @@ class Handler(object):
                 return True
         return False
 
-    def _getRemainingReviewers(self, cc_string, user):
+    def _shouldHandlePull(self, repo, number):
         """
-        Remove user from cc list and  return the remaining list of
-        reviewers.
+        Return True if we should handle this pull request.
         """
-        reviewers = []
-        for review in cc_string.split(','):
-            reviewers.append(review.strip())
-        try:
-            reviewers.remove(user)
-        except ValueError:
-            logging.error(
-                'Current user "%s" not in the list of reviewers %s' % (
-                    user, cc_string))
-        return reviewers
+        repos = self._config['skip'].split(',')
+        if repo in repos:
+            return False
+        if f'{repo}#{number}' in repos:
+            return False
+        return True
+
+    def _raiseIfShouldSkip(self, repo, number):
+        """
+        Raise a HandlerException if we should skip this PR.
+        """
+        if not self._shouldHandlePull(repo, number):
+            raise HandlerException(f'Skipping {repo}#{number}.')
+
+    def _splitReviewers(self, reviewers):
+        """
+        Split a list of reviewers into a dict of two key-value pairs,
+        one with individual account logins, the other with team slugs.
+        """
+        accounts = []
+        teams = []
+        for reviewer in reviewers:
+            if '/' in reviewer:
+                teams.append(reviewer.split('/')[-1])
+                continue
+            accounts.append(reviewer)
+        return {'reviewers': accounts, 'team_reviewers': teams}

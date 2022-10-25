@@ -11,7 +11,7 @@ import azure.functions as func
 import github3
 
 from chevah.github_hooks_server.configuration import CONFIGURATION
-from chevah.github_hooks_server.handler import Handler
+from chevah.github_hooks_server.handler import Handler, HandlerException
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -82,6 +82,11 @@ def hook(req: func.HttpRequest):
         if response:
             return response
         return ''
+    except HandlerException as error:
+        logging.error(
+            f'Failed to handle "{event_name}". {error.message}'
+            )
+        return "Error:005: Failed to handle event."
     except ServerException as error:
         logging.error(
             f'Failed to get json for hook "{event_name}". {error.message}'
@@ -125,7 +130,9 @@ def parse_request(req: func.HttpRequest):
 
 # Set up our hook handler.
 credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
-handler = Handler(github3.login(token=CONFIGURATION['github-token']))
+handler = Handler(
+    github=github3.login(token=CONFIGURATION['github-token']),
+    config=CONFIGURATION)
 
 
 def handle_event(event):

@@ -32,6 +32,10 @@ package:
     - '!.git/**'
     - '!chevah/github_hooks_server/tests/**'
     - '!**.pyc'
+    - '!.pytest_cache/**'
+    - '!.gitsecret/**'
+    - '!.idea/**'
+    - '!test/**'
 
 functions:
   ping:
