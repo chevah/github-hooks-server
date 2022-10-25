@@ -765,13 +765,13 @@ class TestLiveHandler(TestCase):
         issue, stale_pr = self.prepareToNeedReview()
         stale_pr.create_review_requests(['danuker'])
 
-        event = Event(name='issue_comment', content=content)
+        event = Event(name='pull_request', content=content)
 
         self.handler.dispatch(event)
 
         self.assertLog(
             "_setNeedsReview "
-            "event=issue_comment, "
+            "event=pull_request, "
             "repo=chevah/github-hooks-server, "
             "pull_id=8, "
             "reviewers=['danuker']"
@@ -937,7 +937,7 @@ class TestLiveHandler(TestCase):
     def test_pull_request_review_needs_changes(self):
         """
         When the review has the 'Request changes' action the PR is put
-        into the needs-changes state.
+        in the needs-changes state, and any other review requests are removed.
         """
         self.prepareToRequestChanges()
         content = {
@@ -946,7 +946,7 @@ class TestLiveHandler(TestCase):
                 'body': 'bla\r\nbla',
                 'user': {'login': 'adiroiban'},
                 'number': 8,
-                'requested_reviewers': [],
+                'requested_reviewers': [{'login': 'ioanacristinamarinescu'}],
                 'requested_teams': [],
                 },
             'review': {

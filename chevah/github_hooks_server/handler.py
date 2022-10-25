@@ -15,6 +15,16 @@ class HandlerException(Exception):
         self.message = message
 
 
+def get_login(user_or_dict):
+    """
+    Sometimes, github3 parses the requested_reviewers dictionary,
+    other times it does not. Therefore, we need the special case.
+    """
+    if hasattr(user_or_dict, 'login'):
+        return user_or_dict.login
+    return user_or_dict['login']
+
+
 class Handler(object):
     """
     Handles github hooks.
@@ -113,7 +123,7 @@ class Handler(object):
         author_name = event.content['pull_request']['user']['login']
         reviewer_name = event.content['review']['user']['login']
         remaining_reviewers = [
-            u.login
+            get_login(u)
             for u in event.content['pull_request']['requested_reviewers']
             ]
         org = repo.split('/')[0]
