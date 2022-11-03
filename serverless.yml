@@ -3,7 +3,7 @@
 
 service: githubhooks
 
-frameworkVersion: '2'
+frameworkVersion: '3'
 
 provider:
   name: azure

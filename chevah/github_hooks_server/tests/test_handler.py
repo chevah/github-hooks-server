@@ -335,6 +335,26 @@ class TestHandler(TestCase):
 
             self.assertEqual([u'io', u'ala'], result)
 
+    def test_getReviewers_spaces(self):
+        """
+        Reviewers are parsed into a list
+        even if there are multiple blanks between the marker and the nicknames.
+        """
+        for message in [
+            u'Simple r\xc9sume\r\nreviewers:  @io @ala bla\r\nbla',
+            u'Simple r\xc9sume\r\nreviewers:\t@io @ala bla\r\nbla',
+            u'Simple r\xc9sume\r\nreviewers:\t @io @ala bla\r\nbla',
+            u'Simple r\xc9sume\r\nreviewers: \t@io @ala bla\r\nbla',
+            u'Simple r\xc9sume\r\nreviewers:\t\t@io @ala bla\r\nbla',
+            u'Simple r\xc9sume\r\nreviewers:\t\t@io @ala bla\r\n@bla',
+            u'Simple r\xc9sume\r\nreviewers:\t\t@io @ala bla\n@bla',
+            ]:
+
+            result = self.handler._getReviewers(
+                message, 'some/repo', 'ready_for_review')
+
+            self.assertEqual([u'io', u'ala'], result, f'Message was: {message}')
+
     def test_getReviewers_None(self):
         """
         The message body can be None.
