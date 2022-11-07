@@ -33,7 +33,7 @@ class Handler(object):
     """
 
     RE_TRAC_TICKET_ID = r'\[#(\d+)\] .*'
-    RE_REVIEWERS = r'.*reviewers{0,1}:{0,1} @.*'
+    RE_REVIEWERS = r'.*reviewers{0,1}:{0,1}\s+@.*'
     RE_NEEDS_REVIEW = (
         r'.*'
         r'((needs{0,1}[\-_]|please[ \-])review)|'
@@ -362,7 +362,7 @@ class Handler(object):
             result = re.match(self.RE_REVIEWERS, line)
             if not result:
                 continue
-            for word in line.split(' '):
+            for word in line.split():
                 if word.startswith('@'):
                     results.append(word[1:].strip())
         return results

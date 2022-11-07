@@ -89,7 +89,7 @@ Also install `pip_tools` (via `pip`) for `pip-compile`,
 to generate hashes for `requirements.txt`, as a workaround to
 a `poetry issue <https://github.com/python-poetry/poetry/issues/2060#issuecomment-623737835>`_.
 
-Then::
+Then, in the virtual env::
 
     poetry export -f requirements.txt --output requirements.txt
     pip-compile --generate-hashes -o requirements.txt requirements.txt
