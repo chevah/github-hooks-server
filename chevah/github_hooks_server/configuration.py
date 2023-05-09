@@ -5,7 +5,8 @@ def load_configuration(path):
     parser = configparser.ConfigParser()
     parser.read(path)
     if 'github_hooks_server' not in parser.sections():
-        raise RuntimeError('Config section not found.')
+        import os
+        raise RuntimeError(f'Config section not found in file {os.getcwd()}/{path}.')
 
     config = parser['github_hooks_server']
 

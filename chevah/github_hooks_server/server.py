@@ -128,17 +128,19 @@ def parse_request(req: func.HttpRequest):
     return data_dict
 
 
-# Set up our hook handler.
-credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
-handler = Handler(
-    github=github3.login(token=CONFIGURATION['github-token']),
-    config=CONFIGURATION)
+handler = None
 
 
 def handle_event(event):
     """
     Called when we got an event.
     """
+    # Set up our hook handler.
+    if handler is None:
+        handler = Handler(
+            github=github3.login(token=CONFIGURATION['github-token']),
+            config=CONFIGURATION)
+
     logging.info(str(event))
     logging.info(f'Received new event "{event.name}".')
     return handler.dispatch(event)

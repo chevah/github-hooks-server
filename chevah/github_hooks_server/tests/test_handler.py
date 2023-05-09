@@ -133,7 +133,7 @@ class TestHandler(TestCase):
     """
     Tests for push handler.
 
-    These tests do not need the GitHub API.
+    These tests are not allowed to use the GitHub API.
     """
 
     def setUp(self):
@@ -548,6 +548,8 @@ class StubTeam:
 class TestLiveHandler(TestCase):
     """
     Tests requiring a real GitHub connection.
+    It needs `github_token` to be defined in
+    `chevah/github_hooks_server/tests/private.py`.
     """
     def setUp(self):
         super(TestLiveHandler, self).setUp()
@@ -722,7 +724,8 @@ class TestLiveHandler(TestCase):
             requested_reviewers = []
             if action == 'review_requested':
                 requested_reviewers = [
-                    StubUser('danuker'), StubUser('chevah-robot')]
+                    StubUser('danuker'), {'login': 'chevah-robot'},
+                    ]
 
             content = {
                 'action': action,

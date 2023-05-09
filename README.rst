@@ -44,6 +44,11 @@ To activate the virtual environment::
     . venv/node/bin/activate
 
 
+To run the Handler tests (including the end-to-end tests connecting to GitHub)::
+
+    pytest chevah/github_hooks_server/tests/test_handler.py
+
+
 Running offline
 ===============
 
