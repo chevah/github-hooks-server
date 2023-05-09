@@ -86,7 +86,7 @@ class Handler(object):
         pull_id = event.content['pull_request']['number']
         message = event.content['pull_request']['body']
         requested_reviewers = [
-            u.login
+            get_login(u)
             for u in event.content['pull_request']['requested_reviewers']
             ]
         if not requested_reviewers:
