@@ -253,6 +253,15 @@ class Handler(object):
 
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, pull_id)
+        pull = self._github.pull_request(username, repository, pull_id)
+        if not self._hasOnlyApprovingReviews(pull):
+            logging.info(
+                '[%s] Have non-approving or incomplete reviews. '
+                'Can not react to changes-approved command.'
+                % (event.name)
+                )
+            return
+
         if issue:
             if not remaining_reviewers:
                 # All reviewers done
@@ -410,6 +419,17 @@ class Handler(object):
             if result:
                 return True
         return False
+
+    def _hasOnlyApprovingReviews(self, pull):
+        """Check that each user's latest review is an approval."""
+        reviews = sorted(pull.reviews(), key=lambda p: p.submitted_at)
+        latest_review_each_user = {}
+        for review in reviews:
+            latest_review_each_user[review.user] = review
+        return all(
+            (review.state == 'APPROVED' or self._changesApproved(review.body))
+            for review in latest_review_each_user.values()
+            )
 
     def _shouldHandlePull(self, repo, number):
         """

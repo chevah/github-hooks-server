@@ -43,12 +43,6 @@ To activate the virtual environment::
     . venv/bin/activate
     . venv/node/bin/activate
 
-
-To run the Handler tests (including the end-to-end tests connecting to GitHub)::
-
-    pytest chevah/github_hooks_server/tests/test_handler.py
-
-
 Running offline
 ===============
 
@@ -83,7 +77,7 @@ We can not deploy using Serverless on Azure Functions anymore.
 The upload of the package succeeds, but updating the Function App does not.
 
 Therefore, we have to deploy using Azure CLI and Azure Functions Core Tools.
-Serverless is still used, because it generates the proper package.
+Serverless is still useful, because it generates the proper package.
 
 Install
 `Azure CLI <https://github.com/Azure/azure-cli>`_ and

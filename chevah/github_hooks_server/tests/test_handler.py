@@ -7,10 +7,13 @@ The tests in TestLiveHandler are done against a real PR located at
 https://github.com/chevah/github-hooks-server/pull/8
 These are very fragile as they depend on read GitHub data.
 """
+import datetime
 import logging
+import uuid
 from unittest import TestCase
 
 import github3
+from dateutil.tz import tzutc
 
 from chevah.github_hooks_server.configuration import load_configuration
 from chevah.github_hooks_server.handler import Handler
@@ -525,6 +528,108 @@ class TestHandler(TestCase):
             result = self.handler._changesApproved(message)
 
             self.assertTrue(result)
+
+
+class TestHasOnlyApprovingReviews(TestHandler):
+    def test_empty(self):
+        """
+        Returns True for an empty review list.
+        """
+        pull = StubPull(reviews=[])
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_approved(self):
+        """
+        An approved review returns True.
+        """
+        pull = StubPull(reviews=[StubReview('APPROVED')])
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_approved_text(self):
+        """
+        A comment that matches the "changes approved" regex returns True.
+        """
+        pull = StubPull(
+            reviews=[StubReview('COMMENTED', body='changes-approved')])
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_changes_requested(self):
+        """
+        Returns False for a denied review.
+        """
+        pull = StubPull(reviews=[StubReview('CHANGES_REQUESTED')])
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_one_denied(self):
+        """
+        Returns False for an approved and a denied review.
+        """
+        pull = StubPull(reviews=[
+            StubReview('APPROVED'), StubReview('CHANGES_REQUESTED')])
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_two_approved(self):
+        """
+        Returns True for two approved reviews.
+        """
+        pull = StubPull(reviews=[
+            StubReview('APPROVED'), StubReview('APPROVED')])
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_latest_approval_from_same_user(self):
+        """
+        When the latest review from a user approves, it returns True.
+        This happens even if an earlier one requires changes.
+        Times are reversed in the review list, to test that it sorts.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        dan = StubUser('danuker')
+
+        pull = StubPull(reviews=[
+            StubReview('APPROVED', submitted_at=time2, user=dan),
+            StubReview('CHANGES_REQUESTED', submitted_at=time1, user=dan),
+            ])
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+
+    def test_latest_denial_from_same_user(self):
+        """
+        When the latest review from a user denies, it returns True.
+        This happens even if an earlier one requires changes.
+        Times are reversed in the review list, to test that it sorts.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        dan = StubUser('danuker')
+
+        pull = StubPull(reviews=[
+            StubReview('CHANGES_REQUESTED', submitted_at=time2, user=dan),
+            StubReview('APPROVED', submitted_at=time1, user=dan),
+            ])
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull))
+
+
+class StubPull:
+    def __init__(self, reviews):
+        self._reviews = reviews
+
+    def reviews(self):
+        return self._reviews
+
+
+class StubReview:
+    def __init__(self, state, submitted_at=None, user=None, body=''):
+        self.state = state
+
+        if submitted_at is None:
+            submitted_at = datetime.datetime(
+                2023, 5, 11, 17, 42, 52, tzinfo=tzutc())
+        if user is None:
+            user = StubUser(uuid.uuid4())
+
+        self.submitted_at = submitted_at
+        self.user = user
+        self.body = body
 
 
 class StubUser:

@@ -58,3 +58,16 @@ In GitHub you can set up the hook for http://PUBLIC.IP:10041/hook/test
 and then set up port forwarding::
 
     ssh -N -T -R 0.0.0.0:8080:localhost:8080 user@PUBLIC.IP
+
+
+Running tests
+-------------
+
+To run the Handler tests (warning: we have tests connecting to GitHub)::
+
+    # Run all tests
+    pytest chevah/github_hooks_server/tests/test_handler.py
+
+    # Run a specific test
+    pytest chevah/github_hooks_server/tests/test_handler.py::TestLiveHandler::test_review_requested_needs_review
+
