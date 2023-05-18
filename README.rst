@@ -9,9 +9,6 @@ It manages the labels for a PR to keep track of the review state for a PR:
 * needs-changes
 * needs-merge
 
-The GitHub Token needs to have triage permissions to the managed repo,
-and the account must be a member of the organization to be able to see teams.
-
 The code is public but the package is private.
 It is not / and should not be published on PyPi.
 
@@ -71,7 +68,13 @@ while easily iterating.
 Deployment
 ==========
 
-Make sure `config.ini` has an appropriate `github-token` value.
+Make sure `config-secrets.ini` has an appropriate `github-token` value::
+
+    [github_hooks_server]
+    github-token = abc123
+
+The GitHub token needs to have triage permission for the managed repo,
+and the account must be a member of the organization to be able to see teams.
 
 We can not deploy using Serverless on Azure Functions anymore.
 The upload of the package succeeds, but updating the Function App does not.

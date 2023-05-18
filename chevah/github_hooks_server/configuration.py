@@ -1,12 +1,13 @@
 import configparser
 
 
-def load_configuration(path):
+def load_configuration(paths):
     parser = configparser.ConfigParser()
-    parser.read(path)
+    parser.read(paths)
     if 'github_hooks_server' not in parser.sections():
         import os
-        raise RuntimeError(f'Config section not found in file {os.getcwd()}/{path}.')
+        raise RuntimeError(f'Config section not found in files [{paths}] '
+                           f'from {os.getcwd()}.')
 
     config = parser['github_hooks_server']
 
@@ -45,4 +46,4 @@ CONFIGURATION = {
     'default-reviewers': {},
     }
 
-load_configuration('config.ini')
+load_configuration(['config.ini', 'config-secrets.ini'])
