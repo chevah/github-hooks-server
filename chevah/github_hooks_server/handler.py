@@ -59,6 +59,9 @@ class Handler(object):
             logging.debug(message)
             return message
 
+        if not self._github.session.auth.token:
+            raise ValueError('Blank/missing token in GitHub3 Auth field.')
+
         return handler(event)
 
     def ping(self, event):
@@ -257,7 +260,7 @@ class Handler(object):
         if not self._hasOnlyApprovingReviews(pull):
             logging.info(
                 '[%s] Have non-approving or incomplete reviews. '
-                'Can not react to changes-approved command.'
+                'Cancelling changes-approved command.'
                 % (event.name)
                 )
             return
@@ -421,7 +424,9 @@ class Handler(object):
         return False
 
     def _hasOnlyApprovingReviews(self, pull):
-        """Check that each user's latest review is an approval."""
+        """
+        Check that each user's latest review is an approval.
+        """
         reviews = sorted(pull.reviews(), key=lambda p: p.submitted_at)
         latest_review_each_user = {}
         for review in reviews:

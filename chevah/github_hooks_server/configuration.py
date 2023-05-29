@@ -17,6 +17,9 @@ def load_configuration(paths):
     if not CONFIGURATION['github-hook-secret']:
         CONFIGURATION['github-hook-secret'] = None
 
+    if not CONFIGURATION['github-token']:
+        raise ValueError('GitHub token not found or blank.')
+
     if CONFIGURATION['default-reviewers']:
         pairs = [
             pair.split(':')
@@ -41,7 +44,7 @@ CONFIGURATION = {
     'github-hook-secret': None,
 
     # GitHub API key used by react on GitHub.
-    'github-token': 'set-a-token',
+    'github-token': '',
 
     'default-reviewers': {},
     }

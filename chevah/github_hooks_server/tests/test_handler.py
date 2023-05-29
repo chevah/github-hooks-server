@@ -829,8 +829,7 @@ class TestLiveHandler(TestCase):
             requested_reviewers = []
             if action == 'review_requested':
                 requested_reviewers = [
-                    StubUser('danuker'), {'login': 'chevah-robot'},
-                    ]
+                    StubUser('danuker'), {'login': 'chevah-robot'}]
 
             content = {
                 'action': action,

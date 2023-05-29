@@ -1,4 +1,4 @@
-# Files that should not be committed to VCS.
+# Sensitive / secrets
 chevah/github_hooks_server/tests/private.py
 config-secrets.ini
 

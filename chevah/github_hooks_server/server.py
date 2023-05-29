@@ -57,7 +57,7 @@ def ping(req: func.HttpRequest):
     logging.info('Serving a GET ping.')
     name = req.params.get('name')
     if not name:
-        return func.HttpResponse('Pong!')
+        return func.HttpResponse('Pong! From version deployed during PR #54.')
     return func.HttpResponse(f'Greetings, {name}!')
 
 
@@ -128,19 +128,15 @@ def parse_request(req: func.HttpRequest):
     return data_dict
 
 
-handler = None
+handler = Handler(
+    github=github3.login(token=CONFIGURATION['github-token']),
+    config=CONFIGURATION)
 
 
 def handle_event(event):
     """
     Called when we got an event.
     """
-    # Set up our hook handler.
-    if handler is None:
-        handler = Handler(
-            github=github3.login(token=CONFIGURATION['github-token']),
-            config=CONFIGURATION)
-
     logging.info(str(event))
     logging.info(f'Received new event "{event.name}".')
     return handler.dispatch(event)
