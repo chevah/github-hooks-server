@@ -257,7 +257,17 @@ class Handler(object):
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, pull_id)
         pull = self._github.pull_request(username, repository, pull_id)
-        if not self._hasOnlyApprovingReviews(pull):
+        try:
+            pr_description = event.content['pull_request']['body']
+        except KeyError:
+            pr_description = event.content['issue']['body']
+
+        all_reviewers = self._getReviewers(
+                message=pr_description,
+                repo=repo,
+                action='pull_request_review',
+                )
+        if not self._hasOnlyApprovingReviews(pull, all_reviewers):
             logging.info(
                 '[%s] Have non-approving or incomplete reviews. '
                 'Cancelling changes-approved command.'
@@ -423,17 +433,31 @@ class Handler(object):
                 return True
         return False
 
-    def _hasOnlyApprovingReviews(self, pull):
+    def _hasOnlyApprovingReviews(self, pull, acknowledged_logins):
         """
         Check that each user's latest review is an approval.
+        Here we only check that each review approves,
+        not that all the requested reviewers gave a review.
         """
         reviews = sorted(pull.reviews(), key=lambda p: p.submitted_at)
         latest_review_each_user = {}
         for review in reviews:
-            latest_review_each_user[review.user] = review
+            login = get_login(review.user)
+            if self._changesApproved(review.body):
+                review.state = "APPROVED"
+
+            if login in latest_review_each_user:
+                if latest_review_each_user[login].state != 'COMMENTED':
+                    if review.state == 'COMMENTED':
+                        # A "comment" review
+                        # does not override an approval or change request.
+                        continue
+
+            latest_review_each_user[login] = review
         return all(
-            (review.state == 'APPROVED' or self._changesApproved(review.body))
+            review.state == 'APPROVED'
             for review in latest_review_each_user.values()
+            if get_login(review.user) in acknowledged_logins
             )
 
     def _shouldHandlePull(self, repo, number):

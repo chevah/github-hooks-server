@@ -13,7 +13,6 @@ dist/
 virtualenv/
 venv/
 *.egg-info/
-build/
 twistd.log
 
 # Python

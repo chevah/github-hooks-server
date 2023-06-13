@@ -69,5 +69,5 @@ To run the Handler tests (warning: we have tests connecting to GitHub)::
     pytest chevah/github_hooks_server/tests/test_handler.py
 
     # Run a specific test
-    pytest chevah/github_hooks_server/tests/test_handler.py::TestLiveHandler::test_review_requested_needs_review
+    pytest chevah/github_hooks_server/tests/test_handler.py::TestHandler::test_shouldHandlePull
 

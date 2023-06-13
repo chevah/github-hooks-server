@@ -126,10 +126,22 @@ class TestLogAsserter(TestCase):
         # The log is again asserted to be empty during tearDown().
 
 
+# StubAuth and StubSession are needed
+# because of a check that the token is not empty,
+# to aid fixing configuration errors.
+class StubAuth:
+    token = 'not-empty'
+
+
+class StubSession:
+    auth = StubAuth()
+
+
 class NotAGithub3Instance:
     """
     A trap GitHub instance that fails if used in tests that should be offline.
     """
+    session = StubSession()
 
 
 class TestHandler(TestCase):
@@ -530,20 +542,25 @@ class TestHandler(TestCase):
             self.assertTrue(result)
 
 
+def get_all_reviewers(pull):
+    return [r.user.login for r in pull.reviews()]
+
+
 class TestHasOnlyApprovingReviews(TestHandler):
     def test_empty(self):
         """
         Returns True for an empty review list.
         """
         pull = StubPull(reviews=[])
-        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, ['nick']))
 
     def test_approved(self):
         """
         An approved review returns True.
         """
         pull = StubPull(reviews=[StubReview('APPROVED')])
-        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
     def test_approved_text(self):
         """
@@ -551,14 +568,16 @@ class TestHasOnlyApprovingReviews(TestHandler):
         """
         pull = StubPull(
             reviews=[StubReview('COMMENTED', body='changes-approved')])
-        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
     def test_changes_requested(self):
         """
         Returns False for a denied review.
         """
         pull = StubPull(reviews=[StubReview('CHANGES_REQUESTED')])
-        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
     def test_one_denied(self):
         """
@@ -566,7 +585,8 @@ class TestHasOnlyApprovingReviews(TestHandler):
         """
         pull = StubPull(reviews=[
             StubReview('APPROVED'), StubReview('CHANGES_REQUESTED')])
-        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
     def test_two_approved(self):
         """
@@ -574,7 +594,8 @@ class TestHasOnlyApprovingReviews(TestHandler):
         """
         pull = StubPull(reviews=[
             StubReview('APPROVED'), StubReview('APPROVED')])
-        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
     def test_latest_approval_from_same_user(self):
         """
@@ -584,13 +605,14 @@ class TestHasOnlyApprovingReviews(TestHandler):
         """
         time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
         time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
-        dan = StubUser('danuker')
+        dan = StubUser('nick')
 
         pull = StubPull(reviews=[
             StubReview('APPROVED', submitted_at=time2, user=dan),
             StubReview('CHANGES_REQUESTED', submitted_at=time1, user=dan),
             ])
-        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
     def test_latest_denial_from_same_user(self):
         """
@@ -600,13 +622,44 @@ class TestHasOnlyApprovingReviews(TestHandler):
         """
         time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
         time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
-        dan = StubUser('danuker')
+        dan = StubUser('nick')
 
         pull = StubPull(reviews=[
             StubReview('CHANGES_REQUESTED', submitted_at=time2, user=dan),
             StubReview('APPROVED', submitted_at=time1, user=dan),
             ])
-        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull))
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_approve_then_comment_from_same_user(self):
+        """
+        When we have an approval, and then a comment, it is still an approval.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        user = StubUser('nick')
+
+        pull = StubPull(reviews=[
+            StubReview('APPROVED', submitted_at=time1, user=user),
+            StubReview('COMMENTED', submitted_at=time2, user=user),
+            ])
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_change_then_comment_from_same_user(self):
+        """
+        When we have a change request then a comment, it still needs changes.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        user = StubUser('nick')
+
+        pull = StubPull(reviews=[
+            StubReview('CHANGES_REQUESTED', submitted_at=time1, user=user),
+            StubReview('COMMENTED', submitted_at=time2, user=user),
+            ])
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
 
 
 class StubPull:
@@ -626,6 +679,8 @@ class StubReview:
                 2023, 5, 11, 17, 42, 52, tzinfo=tzutc())
         if user is None:
             user = StubUser(uuid.uuid4())
+        if isinstance(user, str):
+            user = StubUser(login=user)
 
         self.submitted_at = submitted_at
         self.user = user
