@@ -1,5 +1,6 @@
 [tool.poetry]
 name = "chevah-github-hooks-server"
+version = "1.0.0"
 description = "Custom handling of GitHub Hooks for Chevah Project."
 authors = ["Adi Roiban <adi.roiban@chevah.com>"]
 license = "MIT"
