@@ -916,6 +916,48 @@ class TestLiveHandler(TestCase):
 
         self.assertReviewRequested()
 
+    def test_review_requested_needs_review_pr_body(self):
+        """
+        When requesting a review from just one person, also add the others
+        from the PR description.
+        """
+        actions = ['review_requested', 'ready_for_review']
+
+        for action in actions:
+            requested_reviewers = []
+            if action == 'review_requested':
+                requested_reviewers = [StubUser('danuker')]
+
+            content = {
+                'action': action,
+                'pull_request': {
+                    'html_url': 'something',
+                    'title': '[#12] Some message.',
+                    'body': 'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
+                    'number': 8,
+                    'user': {'login': 'adiroiban'},
+                    'requested_reviewers': requested_reviewers,
+                    },
+                'repository': {
+                    'full_name': 'chevah/github-hooks-server',
+                    },
+                }
+
+            self.prepareToNeedReview()
+            event = Event(name='pull_request', content=content)
+
+            self.handler.dispatch(event)
+
+            self.assertLog(
+                "_setNeedsReview "
+                "event=pull_request, "
+                "repo=chevah/github-hooks-server, "
+                "pull_id=8, "
+                "reviewers=['danuker', 'chevah-robot']"
+                )
+
+        self.assertReviewRequested()
+
     def test_review_requested_without_reviewers_in_description(self):
         """
         When a user requests a review,

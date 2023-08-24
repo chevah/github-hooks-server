@@ -1,0 +1,5 @@
+Fix crashes when the user returned by Github3 is a dictionary rather than an object.
+Treat approval as insufficient when someone from the required reviewers
+still hasn't approved, only commented.
+When requesting a review manually from a single person,
+add the others from the PR description automatically.

@@ -92,12 +92,14 @@ class Handler(object):
             get_login(u)
             for u in event.content['pull_request']['requested_reviewers']
             ]
-        if not requested_reviewers:
-            requested_reviewers = self._getReviewers(
+
+        description_reviewers = self._getReviewers(
                 message=message,
                 repo=repo,
                 action=action,
                 )
+        requested_reviewers.extend(
+            r for r in description_reviewers if r not in requested_reviewers)
 
         self._raiseIfShouldSkip(repo, pull_id)
 
