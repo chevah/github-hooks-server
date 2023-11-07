@@ -1,11 +1,13 @@
 import configparser
 
 
-def load_configuration(path):
+def load_configuration(paths):
     parser = configparser.ConfigParser()
-    parser.read(path)
+    parser.read(paths)
     if 'github_hooks_server' not in parser.sections():
-        raise RuntimeError('Config section not found.')
+        import os
+        raise RuntimeError(f'Config section not found in files [{paths}] '
+                           f'from {os.getcwd()}.')
 
     config = parser['github_hooks_server']
 
@@ -14,6 +16,9 @@ def load_configuration(path):
     # Fix handling of None value.
     if not CONFIGURATION['github-hook-secret']:
         CONFIGURATION['github-hook-secret'] = None
+
+    if not CONFIGURATION['github-token']:
+        raise ValueError('GitHub token not found or blank.')
 
     if CONFIGURATION['default-reviewers']:
         pairs = [
@@ -39,9 +44,9 @@ CONFIGURATION = {
     'github-hook-secret': None,
 
     # GitHub API key used by react on GitHub.
-    'github-token': 'set-a-token',
+    'github-token': '',
 
     'default-reviewers': {},
     }
 
-load_configuration('config.ini')
+load_configuration(['config.ini', 'config-secrets.ini'])

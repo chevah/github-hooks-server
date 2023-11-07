@@ -57,7 +57,7 @@ def ping(req: func.HttpRequest):
     logging.info('Serving a GET ping.')
     name = req.params.get('name')
     if not name:
-        return func.HttpResponse('Pong!')
+        return func.HttpResponse('Pong! From PR #54 take 2.')
     return func.HttpResponse(f'Greetings, {name}!')
 
 
@@ -128,8 +128,6 @@ def parse_request(req: func.HttpRequest):
     return data_dict
 
 
-# Set up our hook handler.
-credentials_and_address = CONFIGURATION.get('trac-url', 'mock')
 handler = Handler(
     github=github3.login(token=CONFIGURATION['github-token']),
     config=CONFIGURATION)

@@ -1,3 +1,22 @@
+Github_Hooks_Server 1.0.0 (2023-06-15)
+=======================================
+
+Features
+--------
+
+- The project switched from Trac and Buildbot to GitHub and Azure Functions. (#25)
+- We also address the needs of the Twisted project. (#33)
+- Added Towncrier for release note generation. (#54)
+
+
+Bugfixes
+--------
+
+- Fix crashes when the user returned by Github3 is a dictionary rather than an object.
+  Also, treat approval as insufficient when someone from the required reviewers
+  still hasn't approved, only commented. (#54)
+
+
 0.10.0 (2018-11-25)
 ==================
 

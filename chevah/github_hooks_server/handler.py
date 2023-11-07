@@ -59,6 +59,9 @@ class Handler(object):
             logging.debug(message)
             return message
 
+        if not self._github.session.auth.token:
+            raise ValueError('Blank/missing token in GitHub3 Auth field.')
+
         return handler(event)
 
     def ping(self, event):
@@ -86,15 +89,17 @@ class Handler(object):
         pull_id = event.content['pull_request']['number']
         message = event.content['pull_request']['body']
         requested_reviewers = [
-            u.login
+            get_login(u)
             for u in event.content['pull_request']['requested_reviewers']
             ]
-        if not requested_reviewers:
-            requested_reviewers = self._getReviewers(
+
+        description_reviewers = self._getReviewers(
                 message=message,
                 repo=repo,
                 action=action,
                 )
+        requested_reviewers.extend(
+            r for r in description_reviewers if r not in requested_reviewers)
 
         self._raiseIfShouldSkip(repo, pull_id)
 
@@ -253,6 +258,25 @@ class Handler(object):
 
         username, repository = repo.split('/', 1)
         issue = self._github.issue(username, repository, pull_id)
+        pull = self._github.pull_request(username, repository, pull_id)
+        try:
+            pr_description = event.content['pull_request']['body']
+        except KeyError:
+            pr_description = event.content['issue']['body']
+
+        all_reviewers = self._getReviewers(
+                message=pr_description,
+                repo=repo,
+                action='pull_request_review',
+                )
+        if not self._hasOnlyApprovingReviews(pull, all_reviewers):
+            logging.info(
+                '[%s] Have non-approving or incomplete reviews. '
+                'Cancelling changes-approved command.'
+                % (event.name)
+                )
+            return
+
         if issue:
             if not remaining_reviewers:
                 # All reviewers done
@@ -410,6 +434,33 @@ class Handler(object):
             if result:
                 return True
         return False
+
+    def _hasOnlyApprovingReviews(self, pull, acknowledged_logins):
+        """
+        Check that each user's latest review is an approval.
+        Here we only check that each review approves,
+        not that all the requested reviewers gave a review.
+        """
+        reviews = sorted(pull.reviews(), key=lambda p: p.submitted_at)
+        latest_review_each_user = {}
+        for review in reviews:
+            login = get_login(review.user)
+            if self._changesApproved(review.body):
+                review.state = "APPROVED"
+
+            if login in latest_review_each_user:
+                if latest_review_each_user[login].state != 'COMMENTED':
+                    if review.state == 'COMMENTED':
+                        # A "comment" review
+                        # does not override an approval or change request.
+                        continue
+
+            latest_review_each_user[login] = review
+        return all(
+            review.state == 'APPROVED'
+            for review in latest_review_each_user.values()
+            if get_login(review.user) in acknowledged_logins
+            )
 
     def _shouldHandlePull(self, repo, number):
         """

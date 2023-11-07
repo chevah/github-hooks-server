@@ -1,10 +1,11 @@
-# git-secret protected file.
+# Sensitive / secrets
 chevah/github_hooks_server/tests/private.py
+config-secrets.ini
 
 .gitsecret/keys/pubring.gpg~
 .gitsecret/keys/random_seed
 
-# Generic ingore.
+# Generic ignore.
 .noseids
 *.py[co]
 build/
@@ -12,7 +13,6 @@ dist/
 virtualenv/
 venv/
 *.egg-info/
-build/
 twistd.log
 
 # Python

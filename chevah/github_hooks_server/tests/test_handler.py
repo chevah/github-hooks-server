@@ -7,10 +7,13 @@ The tests in TestLiveHandler are done against a real PR located at
 https://github.com/chevah/github-hooks-server/pull/8
 These are very fragile as they depend on read GitHub data.
 """
+import datetime
 import logging
+import uuid
 from unittest import TestCase
 
 import github3
+from dateutil.tz import tzutc
 
 from chevah.github_hooks_server.configuration import load_configuration
 from chevah.github_hooks_server.handler import Handler
@@ -123,17 +126,29 @@ class TestLogAsserter(TestCase):
         # The log is again asserted to be empty during tearDown().
 
 
+# StubAuth and StubSession are needed
+# because of a check that the token is not empty,
+# to aid fixing configuration errors.
+class StubAuth:
+    token = 'not-empty'
+
+
+class StubSession:
+    auth = StubAuth()
+
+
 class NotAGithub3Instance:
     """
     A trap GitHub instance that fails if used in tests that should be offline.
     """
+    session = StubSession()
 
 
 class TestHandler(TestCase):
     """
     Tests for push handler.
 
-    These tests do not need the GitHub API.
+    These tests are not allowed to use the GitHub API.
     """
 
     def setUp(self):
@@ -527,6 +542,151 @@ class TestHandler(TestCase):
             self.assertTrue(result)
 
 
+def get_all_reviewers(pull):
+    return [r.user.login for r in pull.reviews()]
+
+
+class TestHasOnlyApprovingReviews(TestHandler):
+    def test_empty(self):
+        """
+        Returns True for an empty review list.
+        """
+        pull = StubPull(reviews=[])
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, ['nick']))
+
+    def test_approved(self):
+        """
+        An approved review returns True.
+        """
+        pull = StubPull(reviews=[StubReview('APPROVED')])
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_approved_text(self):
+        """
+        A comment that matches the "changes approved" regex returns True.
+        """
+        pull = StubPull(
+            reviews=[StubReview('COMMENTED', body='changes-approved')])
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_changes_requested(self):
+        """
+        Returns False for a denied review.
+        """
+        pull = StubPull(reviews=[StubReview('CHANGES_REQUESTED')])
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_one_denied(self):
+        """
+        Returns False for an approved and a denied review.
+        """
+        pull = StubPull(reviews=[
+            StubReview('APPROVED'), StubReview('CHANGES_REQUESTED')])
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_two_approved(self):
+        """
+        Returns True for two approved reviews.
+        """
+        pull = StubPull(reviews=[
+            StubReview('APPROVED'), StubReview('APPROVED')])
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_latest_approval_from_same_user(self):
+        """
+        When the latest review from a user approves, it returns True.
+        This happens even if an earlier one requires changes.
+        Times are reversed in the review list, to test that it sorts.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        dan = StubUser('nick')
+
+        pull = StubPull(reviews=[
+            StubReview('APPROVED', submitted_at=time2, user=dan),
+            StubReview('CHANGES_REQUESTED', submitted_at=time1, user=dan),
+            ])
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_latest_denial_from_same_user(self):
+        """
+        When the latest review from a user denies, it returns True.
+        This happens even if an earlier one requires changes.
+        Times are reversed in the review list, to test that it sorts.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        dan = StubUser('nick')
+
+        pull = StubPull(reviews=[
+            StubReview('CHANGES_REQUESTED', submitted_at=time2, user=dan),
+            StubReview('APPROVED', submitted_at=time1, user=dan),
+            ])
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_approve_then_comment_from_same_user(self):
+        """
+        When we have an approval, and then a comment, it is still an approval.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        user = StubUser('nick')
+
+        pull = StubPull(reviews=[
+            StubReview('APPROVED', submitted_at=time1, user=user),
+            StubReview('COMMENTED', submitted_at=time2, user=user),
+            ])
+        reviewers = get_all_reviewers(pull)
+        self.assertTrue(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+    def test_change_then_comment_from_same_user(self):
+        """
+        When we have a change request then a comment, it still needs changes.
+        """
+        time1 = datetime.datetime(2022, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        time2 = datetime.datetime(2023, 7, 13, 11, 42, 52, tzinfo=tzutc())
+        user = StubUser('nick')
+
+        pull = StubPull(reviews=[
+            StubReview('CHANGES_REQUESTED', submitted_at=time1, user=user),
+            StubReview('COMMENTED', submitted_at=time2, user=user),
+            ])
+        reviewers = get_all_reviewers(pull)
+        self.assertFalse(self.handler._hasOnlyApprovingReviews(pull, reviewers))
+
+
+class StubPull:
+    def __init__(self, reviews):
+        self._reviews = reviews
+
+    def reviews(self):
+        return self._reviews
+
+
+class StubReview:
+    def __init__(self, state, submitted_at=None, user=None, body=''):
+        self.state = state
+
+        if submitted_at is None:
+            submitted_at = datetime.datetime(
+                2023, 5, 11, 17, 42, 52, tzinfo=tzutc())
+        if user is None:
+            user = StubUser(uuid.uuid4())
+        if isinstance(user, str):
+            user = StubUser(login=user)
+
+        self.submitted_at = submitted_at
+        self.user = user
+        self.body = body
+
+
 class StubUser:
     """
     A stub for a ShortUser returned by Github3.
@@ -548,6 +708,8 @@ class StubTeam:
 class TestLiveHandler(TestCase):
     """
     Tests requiring a real GitHub connection.
+    It needs `github_token` to be defined in
+    `chevah/github_hooks_server/tests/private.py`.
     """
     def setUp(self):
         super(TestLiveHandler, self).setUp()
@@ -722,7 +884,49 @@ class TestLiveHandler(TestCase):
             requested_reviewers = []
             if action == 'review_requested':
                 requested_reviewers = [
-                    StubUser('danuker'), StubUser('chevah-robot')]
+                    StubUser('danuker'), {'login': 'chevah-robot'}]
+
+            content = {
+                'action': action,
+                'pull_request': {
+                    'html_url': 'something',
+                    'title': '[#12] Some message.',
+                    'body': 'bla\r\nreviewers @danuker @chevah-robot\r\nbla',
+                    'number': 8,
+                    'user': {'login': 'adiroiban'},
+                    'requested_reviewers': requested_reviewers,
+                    },
+                'repository': {
+                    'full_name': 'chevah/github-hooks-server',
+                    },
+                }
+
+            self.prepareToNeedReview()
+            event = Event(name='pull_request', content=content)
+
+            self.handler.dispatch(event)
+
+            self.assertLog(
+                "_setNeedsReview "
+                "event=pull_request, "
+                "repo=chevah/github-hooks-server, "
+                "pull_id=8, "
+                "reviewers=['danuker', 'chevah-robot']"
+                )
+
+        self.assertReviewRequested()
+
+    def test_review_requested_needs_review_pr_body(self):
+        """
+        When requesting a review from just one person, also add the others
+        from the PR description.
+        """
+        actions = ['review_requested', 'ready_for_review']
+
+        for action in actions:
+            requested_reviewers = []
+            if action == 'review_requested':
+                requested_reviewers = [StubUser('danuker')]
 
             content = {
                 'action': action,

@@ -10,10 +10,16 @@ python = "^3.8"
 "github3.py" = "^3.0.0"
 azure-functions = "^1.7.2"
 azure-functions-worker = "^1.1.9"
+towncrier = "^23.6.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"
 nodeenv = "^1.6.0"
+
+[tool.towncrier]
+package = "github_hooks_server"
+package_dir = "chevah"
+filename = "release-notes.rst"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
