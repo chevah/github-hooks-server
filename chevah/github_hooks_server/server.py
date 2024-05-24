@@ -57,7 +57,7 @@ def ping(req: func.HttpRequest):
     logging.info('Serving a GET ping.')
     name = req.params.get('name')
     if not name:
-        return func.HttpResponse('Pong! From PR #54 take 2.')
+        return func.HttpResponse('Pong! From PR #65.')
     return func.HttpResponse(f'Greetings, {name}!')
 
 
