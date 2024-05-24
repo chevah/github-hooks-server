@@ -317,6 +317,9 @@ class Handler(object):
             action='issue_comment',
             )
 
+        if commenter_name.endswith('[bot]'):
+            return
+
         if self._needsReview(body):
             self._setNeedsReview(
                 repo=repo, pull_id=pull_id, reviewers=reviewers, event=event

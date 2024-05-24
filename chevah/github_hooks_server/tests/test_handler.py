@@ -265,6 +265,32 @@ class TestHandler(TestCase):
 
         self.assertLog('[issue_comment] Not a created issue comment.')
 
+    def test_issue_comment_from_bot(self):
+        """
+        Noting happens if comment is made by a bot.
+        """
+        content = {
+            u'issue': {
+                u'pull_request': {u'html_url': u'something'},
+                u'title': u'[#12] Some message r\xc9sume.',
+                u'body': '',
+                'number': 123,
+                'user': {'login': 'ignored'},
+                },
+            u'comment': {
+                u'user': {u'login': u'codecov[bot]'},
+                u'body': u'Attention: Patch coverage is `45.30201%` with `163 lines` in your changes are missing coverage. Please review.',
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+        event = Event(name='issue_comment', content=content)
+
+        self.handler.dispatch(event)
+
+        # The log is asserted to be empty during tearDown().
+
     def test_pull_request_review_no_submit_action(self):
         """
         Nothing happens when the action is not one of submission.
