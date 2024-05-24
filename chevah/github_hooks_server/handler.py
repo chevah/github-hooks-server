@@ -317,7 +317,8 @@ class Handler(object):
             action='issue_comment',
             )
 
-        if commenter_name.endswith('[bot]'):
+        if event.content['comment']['user']['type'] != 'User':
+            # Ignore 'Bot' and 'Organization' user types.
             return
 
         if self._needsReview(body):

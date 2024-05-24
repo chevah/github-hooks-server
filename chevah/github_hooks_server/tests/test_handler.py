@@ -224,7 +224,7 @@ class TestHandler(TestCase):
                 'user': {'login': 'ignored'},
                 },
             u'comment': {
-                u'user': {u'login': u'somebody'},
+                u'user': {u'login': u'somebody', 'type': 'User'},
                 u'body': u'Simple words for simple persons r\xc9sume.',
                 },
             'repository': {
@@ -278,7 +278,7 @@ class TestHandler(TestCase):
                 'user': {'login': 'ignored'},
                 },
             u'comment': {
-                u'user': {u'login': u'codecov[bot]'},
+                u'user': {u'login': u'codecov[bot]', 'type': 'not-a-User'},
                 u'body': u'Attention: Patch coverage is `45.30201%` with `163 lines` in your changes are missing coverage. Please review.',
                 },
             'repository': {
@@ -836,7 +836,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': 'somebody'},
+                u'user': {u'login': 'somebody', 'type': 'User'},
                 u'body': body,
                 },
             'repository': {
@@ -877,7 +877,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': 'somebody'},
+                u'user': {u'login': 'somebody', 'type': 'User'},
                 u'body': body,
                 },
             'repository': {
@@ -1047,7 +1047,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': 'somebody'},
+                u'user': {u'login': 'somebody', 'type': 'User'},
                 u'body': body,
                 },
             'repository': {
@@ -1168,7 +1168,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': u'somebody'},
+                u'user': {u'login': u'somebody', 'type': 'User'},
                 u'body': u'Simple r\xc9sume \r\n**needs-changes** magic.',
                 },
             'repository': {
@@ -1291,7 +1291,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             'comment': {
-                'user': {'login': 'chevah-robot'},
+                'user': {'login': 'chevah-robot', 'type': 'User'},
                 'body': 'Simple words r\xc9sume \r\n**changes-approved** p.',
                 },
             'repository': {
@@ -1428,7 +1428,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             'comment': {
-                'user': {'login': 'danuker'},
+                'user': {'login': 'danuker', 'type': 'User'},
                 'body': 'Simple words \r\n**changes-approved** magic.',
                 },
             'repository': {
