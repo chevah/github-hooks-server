@@ -386,7 +386,7 @@ class Handler(object):
             return results
 
         for line in message.splitlines():
-            result = re.match(self.RE_REVIEWERS, line)
+            result = re.match(self.RE_REVIEWERS, line, flags=re.IGNORECASE)
             if not result:
                 continue
             for word in line.split():

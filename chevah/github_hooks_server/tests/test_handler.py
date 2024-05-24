@@ -367,6 +367,10 @@ class TestHandler(TestCase):
             'reviewer:',
             'reviewers',
             'reviewers:',
+            'Reviewer',
+            'ReViEwer:',
+            'Reviewers',
+            'Reviewers:',
             ]
 
         for marker in markers:
