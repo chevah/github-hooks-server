@@ -317,6 +317,10 @@ class Handler(object):
             action='issue_comment',
             )
 
+        if event.content['comment']['user']['type'] != 'User':
+            # Ignore 'Bot' and 'Organization' user types.
+            return
+
         if self._needsReview(body):
             self._setNeedsReview(
                 repo=repo, pull_id=pull_id, reviewers=reviewers, event=event
@@ -383,7 +387,7 @@ class Handler(object):
             return results
 
         for line in message.splitlines():
-            result = re.match(self.RE_REVIEWERS, line)
+            result = re.match(self.RE_REVIEWERS, line, flags=re.IGNORECASE)
             if not result:
                 continue
             for word in line.split():

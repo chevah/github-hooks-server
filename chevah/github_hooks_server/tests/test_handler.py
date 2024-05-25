@@ -224,7 +224,7 @@ class TestHandler(TestCase):
                 'user': {'login': 'ignored'},
                 },
             u'comment': {
-                u'user': {u'login': u'somebody'},
+                u'user': {u'login': u'somebody', 'type': 'User'},
                 u'body': u'Simple words for simple persons r\xc9sume.',
                 },
             'repository': {
@@ -264,6 +264,32 @@ class TestHandler(TestCase):
         self.handler.dispatch(event)
 
         self.assertLog('[issue_comment] Not a created issue comment.')
+
+    def test_issue_comment_from_bot(self):
+        """
+        Noting happens if comment is made by a bot.
+        """
+        content = {
+            u'issue': {
+                u'pull_request': {u'html_url': u'something'},
+                u'title': u'[#12] Some message r\xc9sume.',
+                u'body': '',
+                'number': 123,
+                'user': {'login': 'ignored'},
+                },
+            u'comment': {
+                u'user': {u'login': u'codecov[bot]', 'type': 'not-a-User'},
+                u'body': u'Attention: Patch coverage is `45.30201%` with `163 lines` in your changes are missing coverage. Please review.',
+                },
+            'repository': {
+                'full_name': 'chevah/github-hooks-server',
+                },
+            }
+        event = Event(name='issue_comment', content=content)
+
+        self.handler.dispatch(event)
+
+        # The log is asserted to be empty during tearDown().
 
     def test_pull_request_review_no_submit_action(self):
         """
@@ -341,6 +367,10 @@ class TestHandler(TestCase):
             'reviewer:',
             'reviewers',
             'reviewers:',
+            'Reviewer',
+            'ReViEwer:',
+            'Reviewers',
+            'Reviewers:',
             ]
 
         for marker in markers:
@@ -806,7 +836,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': 'somebody'},
+                u'user': {u'login': 'somebody', 'type': 'User'},
                 u'body': body,
                 },
             'repository': {
@@ -847,7 +877,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': 'somebody'},
+                u'user': {u'login': 'somebody', 'type': 'User'},
                 u'body': body,
                 },
             'repository': {
@@ -1017,7 +1047,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': 'somebody'},
+                u'user': {u'login': 'somebody', 'type': 'User'},
                 u'body': body,
                 },
             'repository': {
@@ -1138,7 +1168,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             u'comment': {
-                u'user': {u'login': u'somebody'},
+                u'user': {u'login': u'somebody', 'type': 'User'},
                 u'body': u'Simple r\xc9sume \r\n**needs-changes** magic.',
                 },
             'repository': {
@@ -1261,7 +1291,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             'comment': {
-                'user': {'login': 'chevah-robot'},
+                'user': {'login': 'chevah-robot', 'type': 'User'},
                 'body': 'Simple words r\xc9sume \r\n**changes-approved** p.',
                 },
             'repository': {
@@ -1398,7 +1428,7 @@ class TestLiveHandler(TestCase):
                 'user': {'login': 'adiroiban'},
                 },
             'comment': {
-                'user': {'login': 'danuker'},
+                'user': {'login': 'danuker', 'type': 'User'},
                 'body': 'Simple words \r\n**changes-approved** magic.',
                 },
             'repository': {

@@ -19,3 +19,6 @@ cp -r ../release-notes.rst .
 cp -r ../requirements.txt .
 cp -r ../scripts .
 cp -r ../setup.py .
+
+echo "Done. Size of unpacked package:"
+du -hs .

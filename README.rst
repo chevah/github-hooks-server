@@ -71,3 +71,15 @@ Then, in the virtual env::
 
 `Courtesy of this comment
 <https://github.com/serverless/serverless-azure-functions/issues/505#issuecomment-713218520>`_.
+
+
+Running tests
+-------------
+
+To run the Handler tests (warning: we have tests connecting to GitHub)::
+
+    # Run all tests
+    pytest chevah/github_hooks_server/tests/test_handler.py
+
+    # Run a specific test
+    pytest chevah/github_hooks_server/tests/test_handler.py::TestHandler::test_shouldHandlePull
