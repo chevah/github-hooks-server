@@ -62,7 +62,7 @@ Then, in the virtual env::
     pip-compile --generate-hashes -o requirements.txt.new requirements.txt
     mv requirements.txt.new requirements.txt
     # Poetry won't pin setuptools, but Azure wants it to prevent tampering.
-    echo 'setuptools==59.6.0 --hash=sha256:4ce92f1e1f8f01233ee9952c04f6b81d1e02939d6e1b488428154974a4d0783e' >> requirements.txt
+    echo 'setuptools==70.1.0 --hash=sha256:d9b8b771455a97c8a9f3ab3448ebe0b29b5e105f1228bba41028be116985a267' >> requirements.txt
     # Before running build-package, make sure all needed files are provided.
     ./build-package.sh
     cd build/
@@ -71,6 +71,16 @@ Then, in the virtual env::
 
 `Courtesy of this comment
 <https://github.com/serverless/serverless-azure-functions/issues/505#issuecomment-713218520>`_.
+
+
+Updating dependencies
+=====================
+
+The `poetry install` step above uses the `poetry.lock` file.
+To update dependencies, remove `poetry.lock`, remove the `venv` directory, then execute the steps above again.
+
+For `setuptools`, manually check the SHA256 of the last release on PyPI.
+For example, in the case of version 70.1.0: https://pypi.org/project/setuptools/70.1.0/#copy-hash-modal-f2f344e1-1f13-4149-9ceb-38b979703ec7
 
 
 Running tests
