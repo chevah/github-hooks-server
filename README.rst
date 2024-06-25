@@ -52,6 +52,8 @@ Install
 `Azure Functions Core Tools
 <https://github.com/Azure/azure-functions-core-tools>`_.
 
+On Arch Linux, these packages are on the AUR named `azure-cli-bin` and `azure-functions-core-tools-bin`. The `azure-cli` package from the official repository did NOT work.
+
 Also install `pip_tools` (via `pip`) for `pip-compile`,
 to generate hashes for `requirements.txt`, as a workaround to
 a `poetry issue <https://github.com/python-poetry/poetry/issues/2060#issuecomment-623737835>`_.
@@ -59,6 +61,7 @@ a `poetry issue <https://github.com/python-poetry/poetry/issues/2060#issuecommen
 Then, in the virtual env::
 
     poetry export -f requirements.txt --output requirements.txt
+    pip install pip_tools
     pip-compile --generate-hashes -o requirements.txt.new requirements.txt
     mv requirements.txt.new requirements.txt
     # Poetry won't pin setuptools, but Azure wants it to prevent tampering.
