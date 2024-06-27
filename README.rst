@@ -21,19 +21,10 @@ Virtual environment
 
 To create a working virtual environment::
 
-    virtualenv -p 3.8 venv  # Last Python version supported by serverless-azure-functions
+    virtualenv -p 3.11 venv
     . venv/bin/activate
-    pip install poetry
+    pip install poetry poetry-plugin-export
     poetry install
-    nodeenv venv/node -n 17.1.0
-    . venv/node/bin/activate
-    npm install -g
-
-
-To activate a virtual environment that already exists::
-
-    . venv/bin/activate
-    . venv/node/bin/activate
 
 
 Deployment
@@ -52,18 +43,12 @@ Install
 `Azure Functions Core Tools
 <https://github.com/Azure/azure-functions-core-tools>`_.
 
-On Arch Linux, these packages are on the AUR named `azure-cli-bin` and `azure-functions-core-tools-bin`. The `azure-cli` package from the official repository did NOT work.
-
-Also install `pip_tools` (via `pip`) for `pip-compile`,
-to generate hashes for `requirements.txt`, as a workaround to
-a `poetry issue <https://github.com/python-poetry/poetry/issues/2060#issuecomment-623737835>`_.
+On Arch Linux, these packages are on the AUR named `azure-cli-bin` and `azure-functions-core-tools-bin`. The `azure-cli` package from the official Arch repository did **NOT** work.
 
 Then, in the virtual env::
 
+    poetry lock  # Uses pyproject.toml to create/update poetry.lock
     poetry export -f requirements.txt --output requirements.txt
-    pip install pip_tools
-    pip-compile --generate-hashes -o requirements.txt.new requirements.txt
-    mv requirements.txt.new requirements.txt
     # Poetry won't pin setuptools, but Azure wants it to prevent tampering.
     echo 'setuptools==70.1.0 --hash=sha256:d9b8b771455a97c8a9f3ab3448ebe0b29b5e105f1228bba41028be116985a267' >> requirements.txt
     # Before running build-package, make sure all needed files are provided.
